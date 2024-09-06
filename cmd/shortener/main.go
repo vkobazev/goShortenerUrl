@@ -23,22 +23,22 @@ func urlShortner(res http.ResponseWriter, req *http.Request) {
 		case http.MethodPost:
 			// Handle POST request
 			req.URL.Scheme = "http"
-			shortUrlPath := "/" + RandomString(6)
-			shortUrl := req.URL.Scheme + "://" + req.Host + shortUrlPath
+			shortURLPath := "/" + RandomString(6)
+			shortURL := req.URL.Scheme + "://" + req.Host + shortURLPath
 
 			body, err := io.ReadAll(req.Body)
 			if err != nil {
 				http.Error(res, "No Url in Body", http.StatusBadRequest)
 			}
-			urls[shortUrlPath] = string(body)
-			log.Printf( "Requested key: --- %s ---", shortUrlPath)
-			log.Printf( "Requested value: --- %s ---", urls[shortUrlPath])			
+			urls[shortURLPath] = string(body)
+			log.Printf( "Requested key: --- %s ---", shortURLPath)
+			log.Printf( "Requested value: --- %s ---", urls[shortURLPath])			
 			log.Printf( "Requested body: --- %s ---", string(body))
 
 			// Writing Response
 			res.Header().Set("Content-Type", "text/plain")
 			res.WriteHeader(http.StatusCreated)
-			io.WriteString(res, shortUrl)
+			io.WriteString(res, shortURL)
 
 		case http.MethodGet:
 			// Handle GET request
