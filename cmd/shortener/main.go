@@ -31,9 +31,6 @@ func urlShortner(res http.ResponseWriter, req *http.Request) {
 				http.Error(res, "No Url in Body", http.StatusBadRequest)
 			}
 			urls[shortURLPath] = string(body)
-			log.Printf( "Requested key: --- %s ---", shortURLPath)
-			log.Printf( "Requested value: --- %s ---", urls[shortURLPath])			
-			log.Printf( "Requested body: --- %s ---", string(body))
 
 			// Writing Response
 			res.Header().Set("Content-Type", "text/plain")
@@ -43,8 +40,7 @@ func urlShortner(res http.ResponseWriter, req *http.Request) {
 		case http.MethodGet:
 			// Handle GET request
 			path := req.URL.Path
-			log.Printf( "Requested key: --- %s ---", path)
-			log.Printf( "Expected value: --- %s ---", urls[path])
+			
 			// Writing Response
 			_, state := urls[path]
 			if !state {
