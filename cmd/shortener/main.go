@@ -40,7 +40,7 @@ func urlShortner(res http.ResponseWriter, req *http.Request) {
 		case http.MethodGet:
 			// Handle GET request
 			path := req.URL.Path
-			
+
 			// Writing Response
 			_, state := urls[path]
 			if !state {
@@ -50,7 +50,7 @@ func urlShortner(res http.ResponseWriter, req *http.Request) {
 			res.WriteHeader(http.StatusTemporaryRedirect)
 
 		default:
-			http.Error(res, "Invalid request method", http.StatusBadRequest)
+			http.Error(res, "Invalid request method", http.StatusMethodNotAllowed)
 	}
 }
 
