@@ -12,7 +12,7 @@ import (
 )
 
 func TestUrlShortener(t *testing.T) {
-	baseUrl := "http://localhost:8080"
+	baseURL := "http://localhost:8080"
 	type want struct {
 		contentType  string
 		statusCode   int
@@ -30,19 +30,19 @@ func TestUrlShortener(t *testing.T) {
 		{
 			name:   "POST request - create short URL",
 			method: http.MethodPost,
-			path:   baseUrl + "/",
+			path:   baseURL + "/",
 			body:   "https://example.com",
 			urls:   map[string]string{},
 			want: want{
 				contentType:  "text/plain; charset=utf-8",
 				statusCode:   http.StatusCreated,
-				responseBody: baseUrl + "/" + "\\w{6}",
+				responseBody: baseURL + "/" + "\\w{6}",
 			},
 		},
 		{
 			name:   "GET request - valid short URL",
 			method: http.MethodGet,
-			path:   baseUrl + "/abc123",
+			path:   baseURL + "/abc123",
 			body:   "",
 			urls: map[string]string{
 				"/abc123": "https://example.com",
@@ -56,7 +56,7 @@ func TestUrlShortener(t *testing.T) {
 		{
 			name:   "GET request - invalid short URL",
 			method: http.MethodGet,
-			path:   baseUrl + "/invalid",
+			path:   baseURL + "/invalid",
 			body:   "",
 			urls:   map[string]string{},
 			want: want{
