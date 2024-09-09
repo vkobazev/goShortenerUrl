@@ -70,7 +70,7 @@ func TestCreateShortURL(t *testing.T) {
 		{
 			name:   "GET request - invalid short URL",
 			method: http.MethodGet,
-			path:   baseURL + "invalid",
+			path:   "/invalid",
 			body:   "",
 			urls:   map[string]string{},
 			want: want{
