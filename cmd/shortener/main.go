@@ -21,10 +21,11 @@ func main() {
 
 	// Create and return the group
 	g := e.Group("/")
-
-	// Define routes
-	g.POST("", CreateShortURL)
-	g.GET(":id", GetLongURL)
+	{
+		// Define routes
+		g.POST("", CreateShortURL)
+		g.GET(":id", GetLongURL)
+	}
 
 	e.Logger.Fatal(e.Start(":8080"))
 }
