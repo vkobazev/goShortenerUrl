@@ -111,11 +111,13 @@ func TestCreateShortURL(t *testing.T) {
 			var err error
 			if tt.method == http.MethodPost {
 				resp, err = client.Post(url, "text/plain", strings.NewReader(tt.body))
+				defer resp.Body.Close()
 			} else {
 				resp, err = client.Get(url)
+				defer resp.Body.Close()
 			}
+
 			require.NoError(t, err)
-			defer resp.Body.Close()
 
 			// Проверяем статус-код
 			assert.Equal(t, tt.want.statusCode, resp.StatusCode)
