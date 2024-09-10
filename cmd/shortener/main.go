@@ -1,8 +1,10 @@
 package main
 
 import (
+	"errors"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/vkobazev/goShortenerUrl/config"
 	"io"
 	"math/rand"
 	"net/http"
@@ -26,15 +28,18 @@ func main() {
 		g.POST("", CreateShortURL)
 		g.GET(":id", GetLongURL)
 	}
-
-	e.Logger.Fatal(e.Start(":8080"))
+	err := config.ParseFlags()
+	if err != nil {
+		errors.New("Can't parse port as string value")
+	}
+	e.Logger.Fatal(e.Start(config.Options.Host + ":" + config.Options.Port))
 }
 
 func CreateShortURL(c echo.Context) error {
 	// Handle POST request
 	c.Request().URL.Scheme = "http"
 	id := RandomString(6)
-	shortURL := c.Request().URL.Scheme + "://" + c.Request().Host + "/" + id
+	shortURL := c.Request().URL.Scheme + "://" + config.Options.ReturnAddr + "/" + id
 
 	// Read body to create Map
 	body, err := io.ReadAll(c.Request().Body)
