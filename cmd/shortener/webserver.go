@@ -6,8 +6,7 @@ import (
 	"github.com/vkobazev/goShortenerUrl/config"
 )
 
-func:q!
-
+func WebServer() {
 
 	e := echo.New()
 	// Add middleware
