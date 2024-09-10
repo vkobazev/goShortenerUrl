@@ -34,12 +34,12 @@ func ParseFlags() error {
 	// Parse string to Options struct
 	as := strings.Split(*a, ":")
 	if len(as) != 2 {
-		return errors.New("Need address in a form host:port ")
+		return errors.New("need address in a form host:port")
 	}
 	// Check port for int convertation
 	_, err := strconv.Atoi(as[1])
 	if err != nil {
-		return errors.New("Can't parse port as string value ")
+		return errors.New("cant parse port as string value")
 	}
 	if (as[0] != "") && (*b == Options.DefHost+":"+Options.DefPort) {
 		Options.ListenAddr = as[0] + ":" + as[1]
