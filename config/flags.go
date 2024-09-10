@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"flag"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -15,7 +16,7 @@ var Options struct {
 	ReturnAddr string
 }
 
-func ParseFlags() error {
+func ConfigService() error {
 
 	// Init flag strings
 	Options.DefScheme = "http"
@@ -54,5 +55,20 @@ func ParseFlags() error {
 		Options.ReturnAddr = *b
 	}
 
+	if ListenAddr := os.Getenv("SERVER_ADDRESS"); ListenAddr != "" {
+		Options.ListenAddr = ListenAddr
+		if *b != Options.DefHost+":"+Options.DefPort {
+			Options.ReturnAddr = *b
+		}
+		ls := strings.Split(Options.ListenAddr, ":")
+		if ls[0] == "" {
+			Options.ReturnAddr = Options.DefHost + ":" + ls[1]
+		} else {
+			Options.ReturnAddr = ls[0] + ":" + ls[1]
+		}
+	}
+	if ReturnAddr := os.Getenv("BASE_URL"); ReturnAddr != "" {
+		Options.ReturnAddr = ReturnAddr
+	}
 	return nil
 }
