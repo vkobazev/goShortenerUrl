@@ -8,6 +8,7 @@ import (
 )
 
 var Options struct {
+	DefScheme  string
 	DefHost    string
 	DefPort    string
 	ListenAddr string
@@ -17,7 +18,8 @@ var Options struct {
 func ParseFlags() error {
 
 	// Init flag strings
-	Options.DefHost = "localhost"
+	Options.DefScheme = "http"
+	Options.DefHost = Options.DefScheme + "://" + "localhost"
 	Options.DefPort = "8080"
 
 	a := flag.String("a", ":"+Options.DefPort,
@@ -41,7 +43,7 @@ func ParseFlags() error {
 	}
 	if (as[0] != "") && (*b == Options.DefHost+":"+Options.DefPort) {
 		Options.ListenAddr = as[0] + ":" + as[1]
-		Options.ReturnAddr = as[0] + ":" + as[1]
+		Options.ReturnAddr = Options.DefScheme + "://" + as[0] + ":" + as[1]
 	}
 	if (as[0] == "") && (*b == Options.DefHost+":"+Options.DefPort) {
 		Options.ListenAddr = as[0] + ":" + as[1]

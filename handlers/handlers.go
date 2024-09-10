@@ -18,9 +18,9 @@ func CreateShortURL(c echo.Context) error {
 	id := RandomString(6)
 	host := config.Options.ReturnAddr
 	if host == "" {
-		host = "localhost:8080"
+		host = c.Request().URL.Scheme + "://" + "localhost:8080"
 	}
-	shortURL := c.Request().URL.Scheme + "://" + host + "/" + id
+	shortURL := host + "/" + id
 
 	// Read body to create Map
 	body, err := io.ReadAll(c.Request().Body)
