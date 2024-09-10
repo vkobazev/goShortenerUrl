@@ -1,9 +1,10 @@
-package main
+package webserver
 
 import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/vkobazev/goShortenerUrl/config"
+	"github.com/vkobazev/goShortenerUrl/handlers"
 )
 
 func WebServer() {
@@ -17,9 +18,9 @@ func WebServer() {
 	g := e.Group("/")
 	{
 		// Define routes
-		g.POST("", CreateShortURL)
-		g.GET(":id", GetLongURL)
+		g.POST("", handlers.CreateShortURL)
+		g.GET(":id", handlers.GetLongURL)
 	}
 
-	e.Logger.Fatal(e.Start(config.Options.Host + ":" + config.Options.Port))
+	e.Logger.Fatal(e.Start(config.Options.ListenAddr))
 }

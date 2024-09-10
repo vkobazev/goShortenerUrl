@@ -1,4 +1,4 @@
-package main
+package handlers
 
 import (
 	"github.com/labstack/echo/v4"
@@ -8,11 +8,19 @@ import (
 	"net/http"
 )
 
+var (
+	Urls = map[string]string{}
+)
+
 func CreateShortURL(c echo.Context) error {
 	// Handle POST request
 	c.Request().URL.Scheme = "http"
 	id := RandomString(6)
-	shortURL := c.Request().URL.Scheme + "://" + config.Options.ReturnAddr + "/" + id
+	host := config.Options.ReturnAddr
+	if host == "" {
+		host = "localhost:8080"
+	}
+	shortURL := c.Request().URL.Scheme + "://" + host + "/" + id
 
 	// Read body to create Map
 	body, err := io.ReadAll(c.Request().Body)

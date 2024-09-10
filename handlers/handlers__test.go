@@ -1,4 +1,4 @@
-package main
+package handlers
 
 import (
 	"io"
@@ -14,7 +14,6 @@ import (
 )
 
 func TestCreateShortURL(t *testing.T) {
-	baseURL := "http://localhost:8080/"
 
 	type want struct {
 		contentType  string
@@ -34,19 +33,19 @@ func TestCreateShortURL(t *testing.T) {
 		{
 			name:   "POST request - create short URL",
 			method: http.MethodPost,
-			path:   baseURL,
+			path:   "/",
 			body:   "https://example.com",
 			urls:   map[string]string{},
 			want: want{
 				contentType:  "text/plain; charset=UTF-8",
 				statusCode:   http.StatusCreated,
-				responseBody: baseURL + "\\w{6}",
+				responseBody: "http://localhost:8080/\\w{6}",
 			},
 		},
 		{
 			name:   "POST request - empty body",
 			method: http.MethodPost,
-			path:   baseURL,
+			path:   "/",
 			body:   "",
 			urls:   map[string]string{},
 			want: want{
@@ -83,36 +82,55 @@ func TestCreateShortURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Создаем новый экземпляр Echo
 			e := echo.New()
+
+			// Устанавливаем глобальную переменную Urls
 			Urls = tt.urls
 
-			request := httptest.NewRequest(tt.method, tt.path, strings.NewReader(tt.body))
-			w := httptest.NewRecorder()
-			c := e.NewContext(request, w)
+			// Регистрируем обработчики
+			e.POST("/", CreateShortURL)
+			e.GET("/:id", GetLongURL)
 
+			// Создаем тестовый сервер
+			server := httptest.NewServer(e)
+			defer server.Close()
+
+			// Формируем URL для запроса
+			url := server.URL + tt.path
+
+			// Создаем HTTP-клиент
+			client := &http.Client{
+				CheckRedirect: func(req *http.Request, via []*http.Request) error {
+					return http.ErrUseLastResponse
+				},
+			}
+
+			// Отправляем запрос
+			var resp *http.Response
 			var err error
 			if tt.method == http.MethodPost {
-				err = CreateShortURL(c)
+				resp, err = client.Post(url, "text/plain", strings.NewReader(tt.body))
 			} else {
-				c.SetParamNames("id")
-				c.SetParamValues(tt.path[1:])
-
-				err = GetLongURL(c)
+				resp, err = client.Get(url)
 			}
 			require.NoError(t, err)
+			defer resp.Body.Close()
 
-			result := w.Result()
-			defer result.Body.Close()
+			// Проверяем статус-код
+			assert.Equal(t, tt.want.statusCode, resp.StatusCode)
 
-			assert.Equal(t, tt.want.statusCode, result.StatusCode)
-			assert.Equal(t, tt.want.contentType, result.Header.Get("Content-Type"))
+			// Проверяем тип контента
+			assert.Equal(t, tt.want.contentType, resp.Header.Get("Content-Type"))
 
+			// Проверяем заголовок Location, если ожидается
 			if tt.want.location != "" {
-				assert.Equal(t, tt.want.location, result.Header.Get("Location"))
+				assert.Equal(t, tt.want.location, resp.Header.Get("Location"))
 			}
 
+			// Проверяем тело ответа, если ожидается
 			if tt.want.responseBody != "" {
-				bodyContent, err := io.ReadAll(result.Body)
+				bodyContent, err := io.ReadAll(resp.Body)
 				require.NoError(t, err)
 				assert.Regexp(t, regexp.MustCompile(tt.want.responseBody), string(bodyContent))
 			}

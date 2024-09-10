@@ -2,11 +2,8 @@ package main
 
 import (
 	"github.com/vkobazev/goShortenerUrl/config"
+	"github.com/vkobazev/goShortenerUrl/webserver"
 	"log"
-)
-
-var (
-	Urls = map[string]string{}
 )
 
 func main() {
@@ -18,5 +15,5 @@ func main() {
 	}
 
 	// Start Web Server
-	WebServer()
+	webserver.WebServer()
 }
