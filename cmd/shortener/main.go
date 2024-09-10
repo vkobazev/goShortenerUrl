@@ -1,8 +1,8 @@
 package main
 
 import (
-	"errors"
 	"github.com/vkobazev/goShortenerUrl/config"
+	"log"
 )
 
 var (
@@ -14,10 +14,9 @@ func main() {
 	// Parse Flags to set up Server
 	err := config.ParseFlags()
 	if err != nil {
-		errors.New("Can't parse port as string value")
+		log.Fatal("Can't parse port as string value")
 	}
 
 	// Start Web Server
 	WebServer()
-
 }

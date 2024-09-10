@@ -18,8 +18,13 @@ func ParseFlags() error {
 	// Init flag strings
 	Options.Host = "localhost"
 	Options.Port = "8080"
-	flagAddr := flag.String("a", ":8080", "Net listen addr")
-	flag.StringVar(&Options.ReturnAddr, "b", Options.Host+":"+Options.Port, "destination folder")
+	flagAddr := flag.String("a", ":8080",
+		"Setup Listen address for your instance of `shortener`,"+
+			"or example `-a :8080`,`-a localhost:8080` and `-a 192.168.0.1:8080`")
+	flag.StringVar(&Options.ReturnAddr, "b", Options.Host+":"+Options.Port,
+		"Setup hostname returning to the client in body,"+
+			"it can be usefull if you have balancer(Nginx,HAproxy) and registered domain(exm.org)."+
+			"Run `-b exm.org` to get in request body `http://exm.org/eAskfc`.")
 	flag.Parse()
 
 	// Parse string to Options struct
