@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/vkobazev/goShortenerUrl/config"
-	"github.com/vkobazev/goShortenerUrl/webserver"
+	"github.com/vkobazev/goShortenerUrl/internal/config"
+	"github.com/vkobazev/goShortenerUrl/internal/webserver"
 	"log"
 )
 

@@ -6,3 +6,5 @@ run:
 	go run  $(find cmd/shortener -maxdepth 1 -name "*.go" ! -name "*_test.go")
 delete:
 	rm ./shortener
+test:
+	go test -v ./handlers/

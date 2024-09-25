@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"flag"
+	"github.com/vkobazev/goShortenerUrl/internal/consts"
 	"os"
 	"strconv"
 	"strings"
@@ -19,8 +20,7 @@ var Options struct {
 func ConfigService() error {
 
 	// Init flag strings
-	Options.DefScheme = "http"
-	Options.DefHost = Options.DefScheme + "://" + "localhost"
+	Options.DefHost = consts.HttpMethod + "://" + "localhost"
 	Options.DefPort = "8080"
 
 	a := flag.String("a", ":"+Options.DefPort,

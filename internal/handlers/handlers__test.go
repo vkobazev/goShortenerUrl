@@ -15,7 +15,7 @@ import (
 
 func TestCreateShortURL(t *testing.T) {
 
-	type want struct {
+	type wantResult struct {
 		contentType  string
 		statusCode   int
 		responseBody string
@@ -23,56 +23,56 @@ func TestCreateShortURL(t *testing.T) {
 	}
 
 	tests := []struct {
-		name   string
-		method string
-		path   string
-		body   string
-		urls   map[string]string
-		want   want
+		testName    string
+		httpMethod  string
+		requestPath string
+		requestBody string
+		testUrls    map[string]string
+		wantResult  wantResult
 	}{
 		{
-			name:   "POST request - create short URL",
-			method: http.MethodPost,
-			path:   "/",
-			body:   "https://example.com",
-			urls:   map[string]string{},
-			want: want{
+			testName:    "POST request - create short URL",
+			httpMethod:  http.MethodPost,
+			requestPath: "/",
+			requestBody: "https://example.com",
+			testUrls:    map[string]string{},
+			wantResult: wantResult{
 				contentType:  "text/plain; charset=UTF-8",
 				statusCode:   http.StatusCreated,
 				responseBody: "http://localhost:8080/\\w{6}",
 			},
 		},
 		{
-			name:   "POST request - empty body",
-			method: http.MethodPost,
-			path:   "/",
-			body:   "",
-			urls:   map[string]string{},
-			want: want{
+			testName:    "POST request - empty requestBody",
+			httpMethod:  http.MethodPost,
+			requestPath: "/",
+			requestBody: "",
+			testUrls:    map[string]string{},
+			wantResult: wantResult{
 				contentType:  "text/plain; charset=UTF-8",
 				statusCode:   http.StatusBadRequest,
 				responseBody: "Body is empty",
 			},
 		},
 		{
-			name:   "GET request - valid short URL",
-			method: http.MethodGet,
-			path:   "/abc123",
-			body:   "",
-			urls:   map[string]string{"abc123": "https://example.com"},
-			want: want{
+			testName:    "GET request - valid short URL",
+			httpMethod:  http.MethodGet,
+			requestPath: "/abc123",
+			requestBody: "",
+			testUrls:    map[string]string{"abc123": "https://example.com"},
+			wantResult: wantResult{
 				contentType: "text/plain; charset=UTF-8",
 				statusCode:  http.StatusTemporaryRedirect,
 				location:    "https://example.com",
 			},
 		},
 		{
-			name:   "GET request - invalid short URL",
-			method: http.MethodGet,
-			path:   "/invalid",
-			body:   "",
-			urls:   map[string]string{},
-			want: want{
+			testName:    "GET request - invalid short URL",
+			httpMethod:  http.MethodGet,
+			requestPath: "/invalid",
+			requestBody: "",
+			testUrls:    map[string]string{},
+			wantResult: wantResult{
 				contentType:  "text/plain; charset=UTF-8",
 				statusCode:   http.StatusNotFound,
 				responseBody: "Short URL not found",
@@ -81,23 +81,25 @@ func TestCreateShortURL(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.testName, func(t *testing.T) {
 			// Создаем новый экземпляр Echo
 			e := echo.New()
 
-			// Устанавливаем глобальную переменную Urls
-			Urls = tt.urls
+			// Устанавливаем глобальную переменную ShortList
+			sh := ShortList{
+				tt.testUrls,
+			}
 
 			// Регистрируем обработчики
-			e.POST("/", CreateShortURL)
-			e.GET("/:id", GetLongURL)
+			e.POST("/", sh.CreateShortURL)
+			e.GET("/:id", sh.GetLongURL)
 
 			// Создаем тестовый сервер
 			server := httptest.NewServer(e)
 			defer server.Close()
 
 			// Формируем URL для запроса
-			url := server.URL + tt.path
+			url := server.URL + tt.requestPath
 
 			// Создаем HTTP-клиент
 			client := &http.Client{
@@ -109,8 +111,8 @@ func TestCreateShortURL(t *testing.T) {
 			// Отправляем запрос
 			var resp *http.Response
 			var err error
-			if tt.method == http.MethodPost {
-				resp, err = client.Post(url, "text/plain", strings.NewReader(tt.body))
+			if tt.httpMethod == http.MethodPost {
+				resp, err = client.Post(url, "text/plain", strings.NewReader(tt.requestBody))
 
 				require.NoError(t, err)
 				defer resp.Body.Close()
@@ -122,21 +124,21 @@ func TestCreateShortURL(t *testing.T) {
 			}
 
 			// Проверяем статус-код
-			assert.Equal(t, tt.want.statusCode, resp.StatusCode)
+			assert.Equal(t, tt.wantResult.statusCode, resp.StatusCode)
 
 			// Проверяем тип контента
-			assert.Equal(t, tt.want.contentType, resp.Header.Get("Content-Type"))
+			assert.Equal(t, tt.wantResult.contentType, resp.Header.Get("Content-Type"))
 
 			// Проверяем заголовок Location, если ожидается
-			if tt.want.location != "" {
-				assert.Equal(t, tt.want.location, resp.Header.Get("Location"))
+			if tt.wantResult.location != "" {
+				assert.Equal(t, tt.wantResult.location, resp.Header.Get("Location"))
 			}
 
 			// Проверяем тело ответа, если ожидается
-			if tt.want.responseBody != "" {
+			if tt.wantResult.responseBody != "" {
 				bodyContent, err := io.ReadAll(resp.Body)
 				require.NoError(t, err)
-				assert.Regexp(t, regexp.MustCompile(tt.want.responseBody), string(bodyContent))
+				assert.Regexp(t, regexp.MustCompile(tt.wantResult.responseBody), string(bodyContent))
 			}
 		})
 	}
