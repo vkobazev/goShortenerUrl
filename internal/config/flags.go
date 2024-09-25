@@ -20,7 +20,7 @@ var Options struct {
 func ConfigService() error {
 
 	// Init flag strings
-	Options.DefHost = consts.HttpMethod + "://" + "localhost"
+	Options.DefHost = consts.HTTPMethod + "://" + "localhost"
 	Options.DefPort = "8080"
 
 	a := flag.String("a", ":"+Options.DefPort,

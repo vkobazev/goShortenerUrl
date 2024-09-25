@@ -22,7 +22,7 @@ func (sh *ShortList) CreateShortURL(c echo.Context) error {
 	id := GenRandomID(consts.ShortURLLength)
 	host := config.Options.ReturnAddr
 	if host == "" {
-		host = consts.HttpMethod + "://" + "localhost:8080"
+		host = consts.HTTPMethod + "://" + "localhost:8080"
 	}
 	shortURL := host + "/" + id
 
