@@ -3,15 +3,35 @@ package logger
 import (
 	"github.com/labstack/echo/v4"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"gopkg.in/natefinch/lumberjack.v2"
 	"time"
 )
 
-func InitLogger() *zap.Logger {
-	logger := zap.Must(zap.NewProduction())
+func InitLogger(logFile string) (*zap.Logger, error) {
 
-	defer logger.Sync()
+	// Create Log rotation
+	w := zapcore.AddSync(&lumberjack.Logger{
+		Filename:   logFile,
+		MaxSize:    500,
+		MaxBackups: 3,
+		MaxAge:     28,
+	})
 
-	return logger
+	encoderConfig := zap.NewProductionEncoderConfig()
+	encoderConfig.TimeKey = "timestamp"
+	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+
+	// Wrap Lumberjack to Zap configuration
+	core := zapcore.NewCore(
+		zapcore.NewJSONEncoder(encoderConfig),
+		w,
+		zap.InfoLevel,
+	)
+
+	logger := zap.New(core, zap.AddCaller())
+
+	return logger, nil
 }
 
 func LoggerMiddleware(logger *zap.Logger) echo.MiddlewareFunc {

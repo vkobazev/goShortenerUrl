@@ -6,6 +6,7 @@ import (
 	"github.com/vkobazev/goShortenerUrl/internal/config"
 	"github.com/vkobazev/goShortenerUrl/internal/handlers"
 	"github.com/vkobazev/goShortenerUrl/internal/logger"
+	"log"
 )
 
 func WebServer() {
@@ -15,7 +16,10 @@ func WebServer() {
 	sh := handlers.NewShortList()
 
 	// Create logger struct
-	l := logger.InitLogger()
+	l, err := logger.InitLogger("./shortener.log")
+	if err != nil {
+		log.Fatalf("failed init logger %s", err)
+	}
 
 	// Add middleware
 	e.Use(middleware.Logger())
