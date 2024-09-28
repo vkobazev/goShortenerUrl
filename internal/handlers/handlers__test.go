@@ -55,6 +55,30 @@ func TestCreateShortURL(t *testing.T) {
 			},
 		},
 		{
+			testName:    "API POST request - create short URL",
+			httpMethod:  http.MethodPost,
+			requestPath: "/api/shorten",
+			requestBody: "{\"url\":\"https://practicum.yandex.ru\"}",
+			testUrls:    map[string]string{},
+			wantResult: wantResult{
+				contentType:  "application/json",
+				statusCode:   http.StatusCreated,
+				responseBody: "http://localhost:8080/\\w{6}",
+			},
+		},
+		{
+			testName:    "API POST request - empty requestBody",
+			httpMethod:  http.MethodPost,
+			requestPath: "/api/shorten",
+			requestBody: "",
+			testUrls:    map[string]string{},
+			wantResult: wantResult{
+				contentType:  "text/plain; charset=UTF-8",
+				statusCode:   http.StatusBadRequest,
+				responseBody: "Body is empty",
+			},
+		},
+		{
 			testName:    "GET request - valid short URL",
 			httpMethod:  http.MethodGet,
 			requestPath: "/abc123",
@@ -93,6 +117,7 @@ func TestCreateShortURL(t *testing.T) {
 			// Регистрируем обработчики
 			e.POST("/", sh.CreateShortURL)
 			e.GET("/:id", sh.GetLongURL)
+			e.POST("/api/shorten", sh.ApiReturnShortURL)
 
 			// Создаем тестовый сервер
 			server := httptest.NewServer(e)
@@ -112,10 +137,17 @@ func TestCreateShortURL(t *testing.T) {
 			var resp *http.Response
 			var err error
 			if tt.httpMethod == http.MethodPost {
-				resp, err = client.Post(url, "text/plain", strings.NewReader(tt.requestBody))
+				if tt.requestPath == "/api/shorten" {
+					resp, err = client.Post(url, "application/json", strings.NewReader(tt.requestBody))
 
-				require.NoError(t, err)
-				defer resp.Body.Close()
+					require.NoError(t, err)
+					defer resp.Body.Close()
+				} else {
+					resp, err = client.Post(url, "text/plain", strings.NewReader(tt.requestBody))
+
+					require.NoError(t, err)
+					defer resp.Body.Close()
+				}
 			} else {
 				resp, err = client.Get(url)
 

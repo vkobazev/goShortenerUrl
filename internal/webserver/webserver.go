@@ -31,6 +31,12 @@ func WebServer() {
 		// Define routes
 		g.POST("", sh.CreateShortURL)
 		g.GET(":id", sh.GetLongURL)
+
+		// Define api group
+		api := g.Group("api/")
+		{
+			api.POST("shorten", sh.ApiReturnShortURL)
+		}
 	}
 
 	e.Logger.Fatal(e.Start(config.Options.ListenAddr))
