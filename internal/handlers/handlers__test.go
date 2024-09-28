@@ -117,7 +117,7 @@ func TestCreateShortURL(t *testing.T) {
 			// Регистрируем обработчики
 			e.POST("/", sh.CreateShortURL)
 			e.GET("/:id", sh.GetLongURL)
-			e.POST("/api/shorten", sh.ApiReturnShortURL)
+			e.POST("/api/shorten", sh.APIReturnShortURL)
 
 			// Создаем тестовый сервер
 			server := httptest.NewServer(e)

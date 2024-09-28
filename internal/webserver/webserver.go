@@ -35,7 +35,7 @@ func WebServer() {
 		// Define api group
 		api := g.Group("api/")
 		{
-			api.POST("shorten", sh.ApiReturnShortURL)
+			api.POST("shorten", sh.APIReturnShortURL)
 		}
 	}
 
