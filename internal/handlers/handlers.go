@@ -59,7 +59,7 @@ func (sh *ShortList) GetLongURL(c echo.Context) error {
 	return c.Redirect(http.StatusTemporaryRedirect, long)
 }
 
-func (sh *ShortList) ApiReturnShortURL(c echo.Context) error {
+func (sh *ShortList) APIReturnShortURL(c echo.Context) error {
 	// Assuming you have a struct to decode the request body
 	var requestData struct {
 		URL string `json:"url"`
