@@ -113,6 +113,7 @@ func TestCreateShortURL(t *testing.T) {
 			sh := ShortList{
 				0,
 				tt.testUrls,
+				true,
 			}
 
 			// Регистрируем обработчики

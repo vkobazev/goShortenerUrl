@@ -13,6 +13,7 @@ import (
 type ShortList struct {
 	Counter uint
 	URLS    map[string]string
+	tests   bool
 }
 
 type ShortResponse struct {
@@ -23,6 +24,7 @@ func NewShortList() *ShortList {
 	return &ShortList{
 		Counter: 0,
 		URLS:    make(map[string]string),
+		tests:   false,
 	}
 }
 
@@ -47,13 +49,15 @@ func (sh *ShortList) CreateShortURL(c echo.Context) error {
 	sh.Counter++
 
 	// Event writing
-	err = data.P.WriteEvent(&data.Event{
-		ID:    sh.Counter,
-		Short: id,
-		Long:  string(body),
-	})
-	if err != nil {
-		panic(err)
+	if !sh.tests {
+		err = data.P.WriteEvent(&data.Event{
+			ID:    sh.Counter,
+			Short: id,
+			Long:  string(body),
+		})
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	// Response writing
@@ -98,13 +102,15 @@ func (sh *ShortList) APIReturnShortURL(c echo.Context) error {
 	sh.Counter++
 
 	// Event writing
-	err := data.P.WriteEvent(&data.Event{
-		ID:    sh.Counter,
-		Short: id,
-		Long:  requestData.URL,
-	})
-	if err != nil {
-		panic(err)
+	if !sh.tests {
+		err := data.P.WriteEvent(&data.Event{
+			ID:    sh.Counter,
+			Short: id,
+			Long:  requestData.URL,
+		})
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	response := ShortResponse{
