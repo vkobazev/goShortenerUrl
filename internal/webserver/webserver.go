@@ -7,6 +7,7 @@ import (
 	"github.com/vkobazev/goShortenerUrl/internal/handlers"
 	"github.com/vkobazev/goShortenerUrl/internal/logger"
 	"log"
+	"strings"
 )
 
 func WebServer() {
@@ -24,7 +25,11 @@ func WebServer() {
 	// Add middleware
 	e.Use(middleware.Logger())
 	e.Use(logger.LoggerMiddleware(l))
-	e.Use(middleware.Gzip())
+	e.Use(middleware.GzipWithConfig(middleware.GzipConfig{
+		Skipper: func(c echo.Context) bool {
+			return !strings.Contains(c.Request().Header.Get("Accept-Encoding"), "gzip")
+		},
+	}))
 
 	// Create and return the group
 	g := e.Group("/")
