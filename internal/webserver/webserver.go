@@ -24,6 +24,7 @@ func WebServer() {
 	// Add middleware
 	e.Use(middleware.Logger())
 	e.Use(logger.LoggerMiddleware(l))
+	e.Use(middleware.Gzip())
 
 	// Create and return the group
 	g := e.Group("/")
