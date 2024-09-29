@@ -28,6 +28,7 @@ func WebServer() {
 	e.Use(middleware.GzipWithConfig(middleware.GzipConfig{
 		Skipper: func(c echo.Context) bool {
 			return !strings.Contains(c.Request().Header.Get("Accept-Encoding"), "gzip")
+
 		},
 	}))
 
