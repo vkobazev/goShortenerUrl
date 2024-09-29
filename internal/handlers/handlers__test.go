@@ -111,6 +111,7 @@ func TestCreateShortURL(t *testing.T) {
 
 			// Устанавливаем глобальную переменную ShortList
 			sh := ShortList{
+				0,
 				tt.testUrls,
 			}
 
