@@ -10,11 +10,12 @@ import (
 )
 
 var Options struct {
-	DefScheme  string
-	DefHost    string
-	DefPort    string
-	ListenAddr string
-	ReturnAddr string
+	DefScheme       string
+	DefHost         string
+	DefPort         string
+	ListenAddr      string
+	ReturnAddr      string
+	FileStoragePath string
 }
 
 func ConfigService() error {
@@ -30,6 +31,7 @@ func ConfigService() error {
 		"Setup hostname returning to the client in body,"+
 			"it can be usefull if you have balancer(Nginx,HAproxy) and registered domain(exm.org)."+
 			"Run `-b exm.org` to get in request body `http://exm.org/eAskfc`.")
+	f := flag.String("f", "./data.json", "File storage path")
 	flag.Parse()
 
 	// Parse string to Options struct
@@ -70,5 +72,11 @@ func ConfigService() error {
 	if ReturnAddr := os.Getenv("BASE_URL"); ReturnAddr != "" {
 		Options.ReturnAddr = ReturnAddr
 	}
+	if FileStoragePath := os.Getenv("FILE_STORAGE_PATH"); FileStoragePath == "" {
+		Options.FileStoragePath = *f
+	} else {
+		Options.FileStoragePath = FileStoragePath
+	}
+
 	return nil
 }

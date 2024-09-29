@@ -4,6 +4,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/vkobazev/goShortenerUrl/internal/config"
+	"github.com/vkobazev/goShortenerUrl/internal/data"
 	"github.com/vkobazev/goShortenerUrl/internal/handlers"
 	"github.com/vkobazev/goShortenerUrl/internal/logger"
 	"log"
@@ -14,6 +15,27 @@ func WebServer() {
 	e := echo.New()
 	// Create New map for Short links list
 	sh := handlers.NewShortList()
+
+	// New Consumer to restore data
+	C, err := data.NewConsumer(config.Options.FileStoragePath)
+	if err != nil {
+		panic(err)
+	}
+	events, err := C.ReadAllEvents()
+	if err != nil {
+		panic(err)
+	}
+	for _, event := range events {
+		sh.URLS[event.Short] = event.Long
+		sh.Counter = event.ID
+	}
+
+	// New Event producer
+	data.P, err = data.NewProducer(config.Options.FileStoragePath)
+	if err != nil {
+		panic(err)
+	}
+	defer data.P.Close()
 
 	// Create logger struct
 	l, err := logger.InitLogger("./shortener.log")

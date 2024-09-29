@@ -4,13 +4,15 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/vkobazev/goShortenerUrl/internal/config"
 	"github.com/vkobazev/goShortenerUrl/internal/consts"
+	"github.com/vkobazev/goShortenerUrl/internal/data"
 	"io"
 	"math/rand"
 	"net/http"
 )
 
 type ShortList struct {
-	urls map[string]string
+	Counter uint
+	URLS    map[string]string
 }
 
 type ShortResponse struct {
@@ -18,7 +20,10 @@ type ShortResponse struct {
 }
 
 func NewShortList() *ShortList {
-	return &ShortList{urls: make(map[string]string)}
+	return &ShortList{
+		Counter: 0,
+		URLS:    make(map[string]string),
+	}
 }
 
 func (sh *ShortList) CreateShortURL(c echo.Context) error {
@@ -38,7 +43,18 @@ func (sh *ShortList) CreateShortURL(c echo.Context) error {
 	if string(body) == "" {
 		return c.String(http.StatusBadRequest, "Body is empty")
 	}
-	sh.urls[id] = string(body)
+	sh.URLS[id] = string(body)
+	sh.Counter++
+
+	// Event writing
+	err = data.P.WriteEvent(&data.Event{
+		ID:    sh.Counter,
+		Short: id,
+		Long:  string(body),
+	})
+	if err != nil {
+		panic(err)
+	}
 
 	// Response writing
 	c.Response().Header().Set("Content-Type", "text/plain; charset=UTF-8")
@@ -50,7 +66,7 @@ func (sh *ShortList) CreateShortURL(c echo.Context) error {
 func (sh *ShortList) GetLongURL(c echo.Context) error {
 	// Handle GET request
 	id := c.Param("id")
-	long, ok := sh.urls[id]
+	long, ok := sh.URLS[id]
 	if !ok {
 		return c.String(http.StatusNotFound, "Short URL not found")
 	}
@@ -78,7 +94,18 @@ func (sh *ShortList) APIReturnShortURL(c echo.Context) error {
 		host = consts.HTTPMethod + "://" + "localhost:8080"
 	}
 
-	sh.urls[id] = requestData.URL
+	sh.URLS[id] = requestData.URL
+	sh.Counter++
+
+	// Event writing
+	err := data.P.WriteEvent(&data.Event{
+		ID:    sh.Counter,
+		Short: id,
+		Long:  requestData.URL,
+	})
+	if err != nil {
+		panic(err)
+	}
 
 	response := ShortResponse{
 		Result: host + "/" + id,
