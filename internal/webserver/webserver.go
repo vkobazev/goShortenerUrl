@@ -14,22 +14,6 @@ import (
 
 func WebServer() {
 
-	// Init DB
-	//conn := database.PostgresConfig{
-	//	Host:     "localhost",
-	//	Port:     5432,
-	//	User:     "postgres",
-	//	Password: "1234",
-	//	DBName:   "postgres",
-	//}
-
-	db, err := database.NewDB()
-	if err != nil {
-		// Handle the error
-		log.Fatal(err)
-	}
-	defer db.Close(context.Background())
-
 	e := echo.New()
 	// Create New map for Short links list
 	sh := handlers.NewShortList()
@@ -74,9 +58,19 @@ func WebServer() {
 		// Define routes
 		g.POST("", sh.CreateShortURL)
 		g.GET(":id", sh.GetLongURL)
-		g.GET("ping", func(c echo.Context) error {
-			return handlers.PingDB(c, db)
-		})
+		if config.Options.DataBaseConn != "" {
+
+			db, err := database.NewDB()
+			if err != nil {
+				// Handle the error
+				log.Fatal(err)
+			}
+			defer db.Close(context.Background())
+
+			g.GET("ping", func(c echo.Context) error {
+				return handlers.PingDB(c, db)
+			})
+		}
 
 		// Define api group
 		api := g.Group("api/")
