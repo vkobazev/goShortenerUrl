@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/jackc/pgx/v5"
-	_ "github.com/jackc/pgx/v5"
 	"github.com/vkobazev/goShortenerUrl/internal/config"
 )
 
