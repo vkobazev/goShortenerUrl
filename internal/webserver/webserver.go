@@ -1,16 +1,34 @@
 package webserver
 
 import (
+	"context"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/vkobazev/goShortenerUrl/internal/config"
 	"github.com/vkobazev/goShortenerUrl/internal/data"
+	"github.com/vkobazev/goShortenerUrl/internal/database"
 	"github.com/vkobazev/goShortenerUrl/internal/handlers"
 	"github.com/vkobazev/goShortenerUrl/internal/logger"
 	"log"
 )
 
 func WebServer() {
+
+	// Init DB
+	//conn := database.PostgresConfig{
+	//	Host:     "localhost",
+	//	Port:     5432,
+	//	User:     "postgres",
+	//	Password: "1234",
+	//	DBName:   "postgres",
+	//}
+
+	db, err := database.NewDB()
+	if err != nil {
+		// Handle the error
+		log.Fatal(err)
+	}
+	defer db.Close(context.Background())
 
 	e := echo.New()
 	// Create New map for Short links list
@@ -56,6 +74,9 @@ func WebServer() {
 		// Define routes
 		g.POST("", sh.CreateShortURL)
 		g.GET(":id", sh.GetLongURL)
+		g.GET("ping", func(c echo.Context) error {
+			return handlers.PingDB(c, db)
+		})
 
 		// Define api group
 		api := g.Group("api/")

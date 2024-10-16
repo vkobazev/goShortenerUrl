@@ -16,6 +16,12 @@ var Options struct {
 	ListenAddr      string
 	ReturnAddr      string
 	FileStoragePath string
+	DataBaseConn    string
+	//DBHost          string
+	//DBPort          int
+	//DBUser          string
+	//DBPassword      string
+	//DBName          string
 }
 
 func ConfigService() error {
@@ -32,6 +38,7 @@ func ConfigService() error {
 			"it can be usefull if you have balancer(Nginx,HAproxy) and registered domain(exm.org)."+
 			"Run `-b exm.org` to get in request body `http://exm.org/eAskfc`.")
 	f := flag.String("f", "./data.json", "File storage path")
+	d := flag.String("d", "", "DB storage connection")
 	flag.Parse()
 
 	// Parse string to Options struct
@@ -76,6 +83,12 @@ func ConfigService() error {
 		Options.FileStoragePath = *f
 	} else {
 		Options.FileStoragePath = FileStoragePath
+	}
+
+	if DataBaseConn := os.Getenv("DATABASE_DSN"); DataBaseConn == "" {
+		Options.DataBaseConn = *d
+	} else {
+		Options.DataBaseConn = DataBaseConn
 	}
 
 	return nil

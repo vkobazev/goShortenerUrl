@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"context"
+	"github.com/jackc/pgx/v5"
 	"github.com/labstack/echo/v4"
 	"github.com/vkobazev/goShortenerUrl/internal/config"
 	"github.com/vkobazev/goShortenerUrl/internal/consts"
@@ -120,7 +122,18 @@ func (sh *ShortList) APIReturnShortURL(c echo.Context) error {
 	return c.JSON(http.StatusCreated, response)
 }
 
-// Helper func for token generate
+// Helper func
+
+func PingDB(c echo.Context, db *pgx.Conn) error {
+	err := db.Ping(context.Background())
+	if err != nil {
+		return c.String(http.StatusInternalServerError, "500 Internal Server Error")
+	}
+
+	// Response writing
+	c.Response().Header().Set("Content-Type", "text/plain; charset=UTF-8")
+	return c.String(http.StatusOK, "OK")
+}
 
 func GenRandomID(num int) string {
 	var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
