@@ -38,7 +38,7 @@ func ConfigService() error {
 			"it can be usefull if you have balancer(Nginx,HAproxy) and registered domain(exm.org)."+
 			"Run `-b exm.org` to get in request body `http://exm.org/eAskfc`.")
 	f := flag.String("f", "./data.json", "File storage path")
-	d := flag.String("d", "", "DB storage connection")
+	d := flag.String("d", "", "DB storage connection urlExample: \"postgres://username:password@localhost:5432/database_name\"")
 	flag.Parse()
 
 	// Parse string to Options struct
