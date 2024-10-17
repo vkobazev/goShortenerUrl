@@ -55,7 +55,8 @@ func (db *DB) CreateTable(ctx context.Context) error {
 			short_url VARCHAR(50) UNIQUE NOT NULL,
 			long_url TEXT NOT NULL,
 			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-		)
+		);
+		CREATE INDEX IF NOT EXISTS idx_short_url ON urls (short_url);
 	`
 
 	_, err := db.conn.Exec(ctx, query)
