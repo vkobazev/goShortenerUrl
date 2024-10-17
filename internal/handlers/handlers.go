@@ -2,12 +2,13 @@ package handlers
 
 import (
 	"context"
-	"github.com/jackc/pgx/v5"
 	"github.com/labstack/echo/v4"
 	"github.com/vkobazev/goShortenerUrl/internal/config"
 	"github.com/vkobazev/goShortenerUrl/internal/consts"
 	"github.com/vkobazev/goShortenerUrl/internal/data"
+	"github.com/vkobazev/goShortenerUrl/internal/database"
 	"io"
+	"log"
 	"math/rand"
 	"net/http"
 )
@@ -16,6 +17,7 @@ type ShortList struct {
 	Counter uint
 	URLS    map[string]string
 	tests   bool
+	DB      *database.DB
 }
 
 type ShortResponse struct {
@@ -47,38 +49,61 @@ func (sh *ShortList) CreateShortURL(c echo.Context) error {
 	if string(body) == "" {
 		return c.String(http.StatusBadRequest, "Body is empty")
 	}
-	sh.URLS[id] = string(body)
-	sh.Counter++
 
-	// Event writing
-	if !sh.tests {
-		err = data.P.WriteEvent(&data.Event{
-			ID:    sh.Counter,
-			Short: id,
-			Long:  string(body),
-		})
+	switch {
+	case config.Options.DataBaseConn == "":
+		sh.URLS[id] = string(body)
+		sh.Counter++
+
+		// Event writing
+		if !sh.tests {
+			err = data.P.WriteEvent(&data.Event{
+				ID:    sh.Counter,
+				Short: id,
+				Long:  string(body),
+			})
+			if err != nil {
+				log.Fatalf("Error writing Event: %v", err)
+			}
+		}
+	default:
+		// Insert a URL
+		err = sh.DB.InsertURL(context.Background(), id, string(body))
 		if err != nil {
-			panic(err)
+			log.Fatalf("Error inserting URL: %v", err)
 		}
 	}
-
 	// Response writing
 	c.Response().Header().Set("Content-Type", "text/plain; charset=UTF-8")
 	c.Response().WriteHeader(http.StatusCreated)
-
 	return c.String(http.StatusCreated, shortURL)
 }
 
 func (sh *ShortList) GetLongURL(c echo.Context) error {
 	// Handle GET request
 	id := c.Param("id")
-	long, ok := sh.URLS[id]
-	if !ok {
-		return c.String(http.StatusNotFound, "Short URL not found")
+
+	switch {
+	case config.Options.DataBaseConn == "":
+		long, ok := sh.URLS[id]
+		if !ok {
+			return c.String(http.StatusNotFound, "Short URL not found")
+		}
+
+		// Response writing
+		c.Response().Header().Set("Content-Type", "text/plain; charset=UTF-8")
+		return c.Redirect(http.StatusTemporaryRedirect, long)
+
+	default:
+		long, err := sh.DB.GetLongURL(context.Background(), id)
+		if err != nil {
+			return c.String(http.StatusNotFound, "Short URL not found")
+		}
+
+		// Response writing
+		c.Response().Header().Set("Content-Type", "text/plain; charset=UTF-8")
+		return c.Redirect(http.StatusTemporaryRedirect, long)
 	}
-	// Response writing
-	c.Response().Header().Set("Content-Type", "text/plain; charset=UTF-8")
-	return c.Redirect(http.StatusTemporaryRedirect, long)
 }
 
 func (sh *ShortList) APIReturnShortURL(c echo.Context) error {
@@ -100,32 +125,40 @@ func (sh *ShortList) APIReturnShortURL(c echo.Context) error {
 		host = consts.HTTPMethod + "://" + "localhost:8080"
 	}
 
-	sh.URLS[id] = requestData.URL
-	sh.Counter++
+	switch {
+	case config.Options.DataBaseConn == "":
+		sh.URLS[id] = requestData.URL
+		sh.Counter++
 
-	// Event writing
-	if !sh.tests {
-		err := data.P.WriteEvent(&data.Event{
-			ID:    sh.Counter,
-			Short: id,
-			Long:  requestData.URL,
-		})
+		// Event writing
+		if !sh.tests {
+			err := data.P.WriteEvent(&data.Event{
+				ID:    sh.Counter,
+				Short: id,
+				Long:  requestData.URL,
+			})
+			if err != nil {
+				panic(err)
+			}
+		}
+
+	default:
+		err := sh.DB.InsertURL(context.Background(), id, requestData.URL)
 		if err != nil {
-			panic(err)
+			log.Fatalf("Error inserting URL: %v", err)
 		}
 	}
 
 	response := ShortResponse{
 		Result: host + "/" + id,
 	}
-
 	return c.JSON(http.StatusCreated, response)
 }
 
 // Helper func
 
-func PingDB(c echo.Context, db *pgx.Conn) error {
-	err := db.Ping(context.Background())
+func (sh *ShortList) PingDB(c echo.Context) error {
+	err := sh.DB.Ping(context.Background())
 	if err != nil {
 		return c.String(http.StatusInternalServerError, "500 Internal Server Error")
 	}

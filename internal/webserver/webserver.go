@@ -1,5 +1,6 @@
 package webserver
 
+import "C"
 import (
 	"context"
 	"github.com/labstack/echo/v4"
@@ -18,26 +19,42 @@ func WebServer() {
 	// Create New map for Short links list
 	sh := handlers.NewShortList()
 
-	// New Consumer to restore data
-	C, err := data.NewConsumer(config.Options.FileStoragePath)
-	if err != nil {
-		panic(err)
-	}
-	events, err := C.ReadAllEvents()
-	if err != nil {
-		panic(err)
-	}
-	for _, event := range events {
-		sh.URLS[event.Short] = event.Long
-		sh.Counter = event.ID
-	}
+	if config.Options.DataBaseConn != "" {
+		// Init DB
+		var err error
 
-	// New Event producer
-	data.P, err = data.NewProducer(config.Options.FileStoragePath)
-	if err != nil {
-		panic(err)
+		sh.DB, err = database.New(config.Options.DataBaseConn)
+		if err != nil {
+			log.Fatalf("Error connecting to database: %v", err)
+		}
+		defer sh.DB.Close(context.Background())
+
+		err = sh.DB.CreateTable(context.Background())
+		if err != nil {
+			log.Fatalf("Error creating table: %v", err)
+		}
+	} else {
+		// New Consumer to restore data
+		C, err := data.NewConsumer(config.Options.FileStoragePath)
+		if err != nil {
+			log.Fatalf("Error creating consumer for Events: %v", err)
+		}
+		events, err := C.ReadAllEvents()
+		if err != nil {
+			log.Fatalf("Error restore DATA from Events: %v", err)
+		}
+		for _, event := range events {
+			sh.URLS[event.Short] = event.Long
+			sh.Counter = event.ID
+		}
+
+		// New Event producer
+		data.P, err = data.NewProducer(config.Options.FileStoragePath)
+		if err != nil {
+			panic(err)
+		}
+		defer data.P.Close()
 	}
-	defer data.P.Close()
 
 	// Create logger struct
 	l, err := logger.InitLogger("./shortener.log")
@@ -58,19 +75,7 @@ func WebServer() {
 		// Define routes
 		g.POST("", sh.CreateShortURL)
 		g.GET(":id", sh.GetLongURL)
-		if config.Options.DataBaseConn != "" {
-
-			db, err := database.NewDB()
-			if err != nil {
-				// Handle the error
-				log.Fatal(err)
-			}
-			defer db.Close(context.Background())
-
-			g.GET("ping", func(c echo.Context) error {
-				return handlers.PingDB(c, db)
-			})
-		}
+		g.GET("ping", sh.PingDB)
 
 		// Define api group
 		api := g.Group("api/")
