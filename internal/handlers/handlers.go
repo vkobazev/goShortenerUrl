@@ -78,6 +78,10 @@ func (sh *ShortList) CreateShortURL(c echo.Context) error {
 			}
 		} else {
 			shortURL = host + "/" + oldID
+			// Response writing
+			c.Response().Header().Set("Content-Type", "text/plain; charset=UTF-8")
+			c.Response().WriteHeader(http.StatusConflict)
+			return c.String(http.StatusConflict, shortURL)
 		}
 	default:
 		exists, err := sh.DB.LongURLExists(context.Background(), string(body))
@@ -91,6 +95,10 @@ func (sh *ShortList) CreateShortURL(c echo.Context) error {
 			}
 
 			shortURL = host + "/" + oldID
+			// Response writing
+			c.Response().Header().Set("Content-Type", "text/plain; charset=UTF-8")
+			c.Response().WriteHeader(http.StatusConflict)
+			return c.String(http.StatusConflict, shortURL)
 
 		} else {
 			// Insert a URL
@@ -175,7 +183,7 @@ func (sh *ShortList) APIReturnShortURL(c echo.Context) error {
 			response := ShortResponse{
 				Result: host + "/" + oldID,
 			}
-			return c.JSON(http.StatusCreated, response)
+			return c.JSON(http.StatusConflict, response)
 		}
 
 	default:
@@ -189,6 +197,15 @@ func (sh *ShortList) APIReturnShortURL(c echo.Context) error {
 			if err != nil {
 				log.Fatalf("Error inserting URL: %v", err)
 			}
+		} else {
+			oldID, err := sh.DB.GetShortURL(context.Background(), requestData.URL)
+			if err != nil {
+				log.Fatalf("Short URL not found: %v", err)
+			}
+			response := ShortResponse{
+				Result: host + "/" + oldID,
+			}
+			return c.JSON(http.StatusConflict, response)
 		}
 	}
 
