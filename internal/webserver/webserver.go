@@ -1,6 +1,5 @@
 package webserver
 
-import "C"
 import (
 	"context"
 	"github.com/labstack/echo/v4"
