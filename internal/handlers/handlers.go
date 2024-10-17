@@ -25,6 +25,11 @@ type ShortResponse struct {
 	Result string `json:"result"`
 }
 
+type LongResponse struct {
+	ID       string `json:"correlation_id"`
+	ShortURL string `json:"short_url"`
+}
+
 func NewShortList() *ShortList {
 	return &ShortList{
 		Counter: 0,
@@ -190,6 +195,58 @@ func (sh *ShortList) APIReturnShortURL(c echo.Context) error {
 	response := ShortResponse{
 		Result: host + "/" + id,
 	}
+	return c.JSON(http.StatusCreated, response)
+}
+
+func (sh *ShortList) APIPutMassiveData(c echo.Context) error {
+
+	var requestDataSlice []database.RequestData
+
+	if err := c.Bind(&requestDataSlice); err != nil {
+		return c.String(http.StatusBadRequest, "Read Body failed")
+	}
+
+	host := config.Options.ReturnAddr
+	if host == "" {
+		host = consts.HTTPMethod + "://" + "localhost:8080"
+	}
+
+	switch {
+	case config.Options.DataBaseConn == "":
+		for _, pair := range requestDataSlice {
+			sh.URLS[pair.ID] = pair.URL
+			sh.ReURLS[pair.URL] = pair.ID
+			sh.Counter++
+
+			// Event writing
+			if !sh.tests {
+				err := data.P.WriteEvent(&data.Event{
+					ID:    sh.Counter,
+					Short: pair.ID,
+					Long:  pair.URL,
+				})
+				if err != nil {
+					panic(err)
+				}
+			}
+		}
+
+	default:
+		err := sh.DB.InsertURLs(context.Background(), requestDataSlice)
+		if err != nil {
+			log.Fatalf("Error inserting URLs: %v", err)
+		}
+	}
+
+	var response []LongResponse
+	for _, pair := range requestDataSlice {
+		long := LongResponse{
+			ID:       pair.ID,
+			ShortURL: host + "/" + pair.ID,
+		}
+		response = append(response, long)
+	}
+
 	return c.JSON(http.StatusCreated, response)
 }
 

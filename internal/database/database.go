@@ -13,6 +13,11 @@ type DB struct {
 	conn *pgx.Conn
 }
 
+type RequestData struct {
+	ID  string `json:"correlation_id"`
+	URL string `json:"original_url"`
+}
+
 // New creates a new database connection
 
 func New(connString string) (*DB, error) {
@@ -131,4 +136,45 @@ func (db *DB) LongURLExists(ctx context.Context, longURL string) (bool, error) {
 	}
 
 	return exists, nil
+}
+
+// InsertURLs inserts multiple URL pairs into the database using a transaction
+
+func (db *DB) InsertURLs(ctx context.Context, urlPairs []RequestData) error {
+	// Start a transaction
+	tx, err := db.conn.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("error starting transaction: %v", err)
+	}
+	// Ensure the transaction is rolled back if an error occurs
+	defer tx.Rollback(ctx)
+
+	// Prepare the query
+	query := `
+		INSERT INTO urls (short_url, long_url)
+		VALUES ($1, $2)
+		ON CONFLICT (short_url) DO UPDATE
+		SET long_url = EXCLUDED.long_url
+	`
+
+	// Create a prepared statement
+	stmt, err := tx.Prepare(ctx, "insert_urls", query)
+	if err != nil {
+		return fmt.Errorf("error preparing statement: %v", err)
+	}
+
+	// Insert each URL pair
+	for _, pair := range urlPairs {
+		_, err := tx.Exec(ctx, stmt.Name, pair.ID, pair.URL)
+		if err != nil {
+			return fmt.Errorf("error inserting URL pair (%s, %s): %v", pair.ID, pair.URL, err)
+		}
+	}
+
+	// Commit the transaction
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("error committing transaction: %v", err)
+	}
+
+	return nil
 }

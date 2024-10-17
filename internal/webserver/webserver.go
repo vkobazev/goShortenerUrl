@@ -80,6 +80,7 @@ func WebServer() {
 		api := g.Group("api/")
 		{
 			api.POST("shorten", sh.APIReturnShortURL)
+			api.POST("shorten/batch", sh.APIPutMassiveData)
 		}
 	}
 
