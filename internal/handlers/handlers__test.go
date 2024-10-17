@@ -114,6 +114,7 @@ func TestCreateShortURL(t *testing.T) {
 				0,
 				tt.testUrls,
 				true,
+				nil,
 			}
 
 			// Регистрируем обработчики
