@@ -113,6 +113,7 @@ func TestCreateShortURL(t *testing.T) {
 			sh := ShortList{
 				0,
 				tt.testUrls,
+				make(map[string]string),
 				true,
 				nil,
 			}

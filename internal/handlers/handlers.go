@@ -16,6 +16,7 @@ import (
 type ShortList struct {
 	Counter uint
 	URLS    map[string]string
+	ReURLS  map[string]string
 	tests   bool
 	DB      *database.DB
 }
@@ -28,6 +29,7 @@ func NewShortList() *ShortList {
 	return &ShortList{
 		Counter: 0,
 		URLS:    make(map[string]string),
+		ReURLS:  make(map[string]string),
 		tests:   false,
 	}
 }
@@ -52,25 +54,45 @@ func (sh *ShortList) CreateShortURL(c echo.Context) error {
 
 	switch {
 	case config.Options.DataBaseConn == "":
-		sh.URLS[id] = string(body)
-		sh.Counter++
+		oldID, ok := sh.ReURLS[string(body)]
+		if !ok {
+			sh.URLS[id] = string(body)
+			sh.ReURLS[string(body)] = id
+			sh.Counter++
 
-		// Event writing
-		if !sh.tests {
-			err = data.P.WriteEvent(&data.Event{
-				ID:    sh.Counter,
-				Short: id,
-				Long:  string(body),
-			})
-			if err != nil {
-				log.Fatalf("Error writing Event: %v", err)
+			// Event writing
+			if !sh.tests {
+				err = data.P.WriteEvent(&data.Event{
+					ID:    sh.Counter,
+					Short: id,
+					Long:  string(body),
+				})
+				if err != nil {
+					log.Fatalf("Error writing Event: %v", err)
+				}
 			}
+		} else {
+			shortURL = host + "/" + oldID
 		}
 	default:
-		// Insert a URL
-		err = sh.DB.InsertURL(context.Background(), id, string(body))
+		exists, err := sh.DB.LongURLExists(context.Background(), string(body))
 		if err != nil {
-			log.Fatalf("Error inserting URL: %v", err)
+			log.Fatalf("Error checking long URL existence: %v", err)
+		}
+		if exists {
+			oldID, err := sh.DB.GetShortURL(context.Background(), string(body))
+			if err != nil {
+				return c.String(http.StatusNotFound, "Short URL not found")
+			}
+
+			shortURL = host + "/" + oldID
+
+		} else {
+			// Insert a URL
+			err = sh.DB.InsertURL(context.Background(), id, string(body))
+			if err != nil {
+				log.Fatalf("Error inserting URL: %v", err)
+			}
 		}
 	}
 	// Response writing
@@ -127,25 +149,41 @@ func (sh *ShortList) APIReturnShortURL(c echo.Context) error {
 
 	switch {
 	case config.Options.DataBaseConn == "":
-		sh.URLS[id] = requestData.URL
-		sh.Counter++
+		oldID, ok := sh.ReURLS[requestData.URL]
+		if !ok {
+			sh.URLS[id] = requestData.URL
+			sh.ReURLS[requestData.URL] = id
+			sh.Counter++
 
-		// Event writing
-		if !sh.tests {
-			err := data.P.WriteEvent(&data.Event{
-				ID:    sh.Counter,
-				Short: id,
-				Long:  requestData.URL,
-			})
-			if err != nil {
-				panic(err)
+			// Event writing
+			if !sh.tests {
+				err := data.P.WriteEvent(&data.Event{
+					ID:    sh.Counter,
+					Short: id,
+					Long:  requestData.URL,
+				})
+				if err != nil {
+					panic(err)
+				}
 			}
+		} else {
+			response := ShortResponse{
+				Result: host + "/" + oldID,
+			}
+			return c.JSON(http.StatusCreated, response)
 		}
 
 	default:
-		err := sh.DB.InsertURL(context.Background(), id, requestData.URL)
+		exists, err := sh.DB.LongURLExists(context.Background(), requestData.URL)
 		if err != nil {
-			log.Fatalf("Error inserting URL: %v", err)
+			log.Fatalf("Error checking long URL existence: %v", err)
+		}
+		if !exists {
+			// Insert a URL
+			err = sh.DB.InsertURL(context.Background(), id, requestData.URL)
+			if err != nil {
+				log.Fatalf("Error inserting URL: %v", err)
+			}
 		}
 	}
 

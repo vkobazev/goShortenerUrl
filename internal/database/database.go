@@ -56,7 +56,7 @@ func (db *DB) CreateTable(ctx context.Context) error {
 			long_url TEXT NOT NULL,
 			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 		);
-		CREATE INDEX IF NOT EXISTS idx_short_url ON urls (short_url);
+		CREATE INDEX IF NOT EXISTS idx_short_url ON urls (short_url, long_url);
 	`
 
 	_, err := db.conn.Exec(ctx, query)
@@ -85,6 +85,23 @@ func (db *DB) InsertURL(ctx context.Context, shortURL, longURL string) error {
 	return nil
 }
 
+// GetShortURL retrieves the short URL for a given long URL
+
+func (db *DB) GetShortURL(ctx context.Context, longURL string) (string, error) {
+	var shortURL string
+	query := "SELECT short_url FROM urls WHERE long_url = $1"
+
+	err := db.conn.QueryRow(ctx, query, longURL).Scan(&shortURL)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return "", fmt.Errorf("long URL not found")
+		}
+		return "", fmt.Errorf("error retrieving short URL: %v", err)
+	}
+
+	return shortURL, nil
+}
+
 // GetLongURL retrieves the long URL for a given short URL
 
 func (db *DB) GetLongURL(ctx context.Context, shortURL string) (string, error) {
@@ -100,4 +117,18 @@ func (db *DB) GetLongURL(ctx context.Context, shortURL string) (string, error) {
 	}
 
 	return longURL, nil
+}
+
+// LongURLExists checks if a long URL already exists in the database
+
+func (db *DB) LongURLExists(ctx context.Context, longURL string) (bool, error) {
+	var exists bool
+	query := "SELECT EXISTS(SELECT 1 FROM urls WHERE long_url = $1)"
+
+	err := db.conn.QueryRow(ctx, query, longURL).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("error checking long URL existence: %v", err)
+	}
+
+	return exists, nil
 }
