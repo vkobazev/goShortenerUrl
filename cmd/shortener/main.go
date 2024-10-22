@@ -15,5 +15,5 @@ func main() {
 	}
 
 	// Start Web Server
-	webserver.WebServer()
+	webserver.StartWebServer()
 }

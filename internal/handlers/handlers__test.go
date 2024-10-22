@@ -109,8 +109,8 @@ func TestCreateShortURL(t *testing.T) {
 			// Создаем новый экземпляр Echo
 			e := echo.New()
 
-			// Устанавливаем глобальную переменную ShortList
-			sh := ShortList{
+			// Устанавливаем глобальную переменную URLShortener
+			sh := URLShortener{
 				0,
 				tt.testUrls,
 				make(map[string]string),

@@ -229,3 +229,4 @@
 {"level":"info","timestamp":"2024-10-18T02:01:03.995+0300","caller":"logger/logger.go:56","msg":"HTTP request","ip":"127.0.0.1","method":"POST","uri":"/","status":409,"user_agent":"PostmanRuntime/7.42.0","referer":"","latency":0.008187792}
 {"level":"info","timestamp":"2024-10-18T02:01:05.143+0300","caller":"logger/logger.go:56","msg":"HTTP request","ip":"127.0.0.1","method":"POST","uri":"/","status":409,"user_agent":"PostmanRuntime/7.42.0","referer":"","latency":0.007283125}
 {"level":"info","timestamp":"2024-10-18T02:01:06.200+0300","caller":"logger/logger.go:56","msg":"HTTP request","ip":"127.0.0.1","method":"POST","uri":"/","status":409,"user_agent":"PostmanRuntime/7.42.0","referer":"","latency":0.001935333}
+{"level":"info","timestamp":"2024-10-22T22:56:41.989+0300","caller":"logger/logger.go:56","msg":"HTTP request","ip":"127.0.0.1","method":"POST","uri":"/","status":409,"user_agent":"PostmanRuntime/7.42.0","referer":"","latency":39.578099125}
