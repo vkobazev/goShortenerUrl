@@ -58,7 +58,6 @@ func SetupEvents(sh *handlers.URLShortener) {
 	if err != nil {
 		panic(err)
 	}
-	defer data.P.Close()
 }
 
 func SetupEcho(l *zap.Logger, sh *handlers.URLShortener) {
