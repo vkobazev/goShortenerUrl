@@ -8,6 +8,7 @@ import (
 	"github.com/vkobazev/goShortenerUrl/internal/consts"
 	"github.com/vkobazev/goShortenerUrl/internal/data"
 	"github.com/vkobazev/goShortenerUrl/internal/database"
+	jwt "github.com/vkobazev/goShortenerUrl/internal/jwt"
 	"io"
 	"log"
 	"math/rand"
@@ -24,11 +25,13 @@ type URLShortener struct {
 
 type ShortResponse struct {
 	Result string `json:"result"`
+	UserID string `json:"user_id,omitempty"`
 }
 
 type LongResponse struct {
 	ID       string `json:"correlation_id"`
 	ShortURL string `json:"short_url"`
+	UserID   string `json:"user_id,omitempty"`
 }
 
 func NewShortList() *URLShortener {
@@ -41,7 +44,9 @@ func NewShortList() *URLShortener {
 }
 
 func (sh *URLShortener) CreateShortURL(c echo.Context) error {
-	// Read requestBody
+
+	userID := c.Get(jwt.UserIDKey).(string)
+
 	body, err := io.ReadAll(c.Request().Body)
 	if err != nil {
 		return c.String(http.StatusBadRequest, "Read Body failed")
@@ -51,7 +56,7 @@ func (sh *URLShortener) CreateShortURL(c echo.Context) error {
 	}
 
 	longURL := string(body)
-	shortURL, err := sh.StoreURL(longURL)
+	shortURL, err := sh.StoreURL(longURL, userID)
 	if err != nil {
 		if err.Error() == "conflict" {
 			c.Response().Header().Set("Content-Type", "text/plain; charset=UTF-8")
@@ -61,28 +66,31 @@ func (sh *URLShortener) CreateShortURL(c echo.Context) error {
 		return c.String(http.StatusInternalServerError, "Internal server error")
 	}
 
-	// Response writing
 	c.Response().Header().Set("Content-Type", "text/plain; charset=UTF-8")
 	c.Response().WriteHeader(http.StatusCreated)
 	return c.String(http.StatusCreated, shortURL)
 }
 
 func (sh *URLShortener) GetLongURL(c echo.Context) error {
-	// Handle GET request
+
 	id := c.Param("id")
 
-	longURL, err := sh.RetrieveURL(id)
+	longURL, _, err := sh.RetrieveURL(id)
 	if err != nil {
 		return c.String(http.StatusNotFound, "Short URL not found")
 	}
 
-	// Response writing
+	// You might want to add authorization check here
+	// depending on your requirements
+
 	c.Response().Header().Set("Content-Type", "text/plain; charset=UTF-8")
 	return c.Redirect(http.StatusTemporaryRedirect, longURL)
 }
 
 func (sh *URLShortener) APIReturnShortURL(c echo.Context) error {
-	// Assuming you have a struct to decode the request body
+
+	userID := c.Get(jwt.UserIDKey).(string)
+
 	var requestData struct {
 		URL string `json:"url"`
 	}
@@ -94,11 +102,12 @@ func (sh *URLShortener) APIReturnShortURL(c echo.Context) error {
 		return c.String(http.StatusBadRequest, "Body is empty")
 	}
 
-	shortURL, err := sh.StoreURL(requestData.URL)
+	shortURL, err := sh.StoreURL(requestData.URL, userID)
 	if err != nil {
 		if err.Error() == "conflict" {
 			response := ShortResponse{
 				Result: shortURL,
+				UserID: userID,
 			}
 			return c.JSON(http.StatusConflict, response)
 		}
@@ -107,15 +116,23 @@ func (sh *URLShortener) APIReturnShortURL(c echo.Context) error {
 
 	response := ShortResponse{
 		Result: shortURL,
+		UserID: userID,
 	}
 	return c.JSON(http.StatusCreated, response)
 }
 
 func (sh *URLShortener) APIPutMassiveData(c echo.Context) error {
-	var requestDataSlice []database.RequestData
 
+	userID := c.Get(jwt.UserIDKey).(string)
+
+	var requestDataSlice []database.RequestData
 	if err := c.Bind(&requestDataSlice); err != nil {
 		return c.String(http.StatusBadRequest, "Read Body failed")
+	}
+
+	// Add userID to each request
+	for i := range requestDataSlice {
+		requestDataSlice[i].UserID = userID
 	}
 
 	response, err := sh.StoreURLBatch(requestDataSlice)
@@ -124,6 +141,20 @@ func (sh *URLShortener) APIPutMassiveData(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusCreated, response)
+}
+
+func (sh *URLShortener) APIReturnUserData(c echo.Context) error {
+
+	userID := c.Get(jwt.UserIDKey).(string)
+
+	urls, err := sh.DB.GetURLsByUser(context.Background(), userID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{
+			"message": "Failed to retrieve user URLs",
+		})
+	}
+
+	return c.JSON(http.StatusOK, urls)
 }
 
 // Helper functions
@@ -151,7 +182,7 @@ func GenRandomID(num int) string {
 
 // Business logic functions
 
-func (sh *URLShortener) StoreURL(longURL string) (string, error) {
+func (sh *URLShortener) StoreURL(longURL, userID string) (string, error) {
 	id := GenRandomID(consts.ShortURLLength)
 	host := config.Options.ReturnAddr
 	if host == "" {
@@ -167,12 +198,12 @@ func (sh *URLShortener) StoreURL(longURL string) (string, error) {
 			sh.ReURLS[longURL] = id
 			sh.Counter++
 
-			// Event writing
 			if !sh.Tests {
 				err := data.P.WriteEvent(&data.Event{
-					ID:    sh.Counter,
-					Short: id,
-					Long:  longURL,
+					ID:     sh.Counter,
+					Short:  id,
+					Long:   longURL,
+					UserID: userID,
 				})
 				if err != nil {
 					log.Fatalf("Error writing Event: %v", err)
@@ -184,20 +215,19 @@ func (sh *URLShortener) StoreURL(longURL string) (string, error) {
 			return shortURL, fmt.Errorf("conflict")
 		}
 	default:
-		exists, err := sh.DB.LongURLExists(context.Background(), longURL)
+		exists, err := sh.DB.LongURLExists(context.Background(), longURL, userID)
 		if err != nil {
 			log.Fatalf("Error checking long URL existence: %v", err)
 		}
 		if exists {
-			oldID, err := sh.DB.GetShortURL(context.Background(), longURL)
+			oldID, err := sh.DB.GetShortURL(context.Background(), longURL, userID)
 			if err != nil {
 				return "", err
 			}
 			shortURL = host + "/" + oldID
 			return shortURL, fmt.Errorf("conflict")
 		} else {
-			// Insert a URL
-			err = sh.DB.InsertURL(context.Background(), id, longURL)
+			err = sh.DB.InsertURL(context.Background(), id, longURL, userID)
 			if err != nil {
 				log.Fatalf("Error inserting URL: %v", err)
 			}
@@ -206,20 +236,20 @@ func (sh *URLShortener) StoreURL(longURL string) (string, error) {
 	}
 }
 
-func (sh *URLShortener) RetrieveURL(id string) (string, error) {
+func (sh *URLShortener) RetrieveURL(id string) (string, string, error) {
 	switch {
 	case config.Options.DataBaseConn == "":
 		longURL, ok := sh.URLS[id]
 		if !ok {
-			return "", fmt.Errorf("not found")
+			return "", "", fmt.Errorf("not found")
 		}
-		return longURL, nil
+		return longURL, "", nil
 	default:
-		longURL, err := sh.DB.GetLongURL(context.Background(), id)
+		longURL, userID, err := sh.DB.GetLongURL(context.Background(), id)
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
-		return longURL, nil
+		return longURL, userID, nil
 	}
 }
 

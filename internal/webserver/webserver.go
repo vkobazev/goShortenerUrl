@@ -8,6 +8,7 @@ import (
 	"github.com/vkobazev/goShortenerUrl/internal/data"
 	"github.com/vkobazev/goShortenerUrl/internal/database"
 	"github.com/vkobazev/goShortenerUrl/internal/handlers"
+	"github.com/vkobazev/goShortenerUrl/internal/jwt"
 	"github.com/vkobazev/goShortenerUrl/internal/logger"
 	"go.uber.org/zap"
 	"log"
@@ -68,6 +69,7 @@ func SetupEcho(l *zap.Logger, sh *handlers.URLShortener) {
 
 	e.Use(DecompressGZIP) // Gzip middlewares
 	e.Use(middleware.Gzip())
+	e.Use(jwt.JWTMiddleware())
 
 	// Create and return the group
 	g := e.Group("/")
@@ -82,6 +84,11 @@ func SetupEcho(l *zap.Logger, sh *handlers.URLShortener) {
 		{
 			api.POST("shorten", sh.APIReturnShortURL)
 			api.POST("shorten/batch", sh.APIPutMassiveData)
+
+			user := api.Group("user/")
+			{
+				user.GET("urls", sh.APIReturnUserData)
+			}
 		}
 	}
 

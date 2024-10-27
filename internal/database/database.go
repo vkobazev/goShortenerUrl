@@ -14,11 +14,10 @@ type DB struct {
 }
 
 type RequestData struct {
-	ID  string `json:"correlation_id"`
-	URL string `json:"original_url"`
+	ID     string `json:"correlation_id"`
+	URL    string `json:"original_url"`
+	UserID string `json:"user_id"`
 }
-
-// New creates a new database connection
 
 func New(connString string) (*DB, error) {
 	conn, err := pgx.Connect(context.Background(), connString)
@@ -29,7 +28,9 @@ func New(connString string) (*DB, error) {
 	return &DB{conn: conn}, nil
 }
 
-// Ping checks if the database connection is still alive
+func (db *DB) Close(ctx context.Context) error {
+	return db.conn.Close(ctx)
+}
 
 func (db *DB) Ping(ctx context.Context) error {
 	// Create a context with a timeout
@@ -45,24 +46,20 @@ func (db *DB) Ping(ctx context.Context) error {
 	return nil
 }
 
-// Close closes the database connection
-
-func (db *DB) Close(ctx context.Context) error {
-	return db.conn.Close(ctx)
-}
-
-// CreateTable creates the URL table if it doesn't exist
+// Modified CreateTable function to include user_id
 
 func (db *DB) CreateTable(ctx context.Context) error {
 	query := `
-		CREATE TABLE IF NOT EXISTS urls (
-			id SERIAL PRIMARY KEY,
-			short_url VARCHAR(50) UNIQUE NOT NULL,
-			long_url TEXT NOT NULL,
-			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-		);
-		CREATE INDEX IF NOT EXISTS idx_short_url ON urls (short_url, long_url);
-	`
+        CREATE TABLE IF NOT EXISTS urls (
+            id SERIAL PRIMARY KEY,
+            short_url VARCHAR(50) UNIQUE NOT NULL,
+            long_url TEXT NOT NULL,
+            user_id VARCHAR(50) NOT NULL,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_short_url ON urls (short_url, long_url);
+        CREATE INDEX IF NOT EXISTS idx_user_id ON urls (user_id);
+    `
 
 	_, err := db.conn.Exec(ctx, query)
 	if err != nil {
@@ -72,17 +69,18 @@ func (db *DB) CreateTable(ctx context.Context) error {
 	return nil
 }
 
-// InsertURL inserts a new short URL and its corresponding long URL into the database
+// Modified InsertURL function to include user_id
 
-func (db *DB) InsertURL(ctx context.Context, shortURL, longURL string) error {
+func (db *DB) InsertURL(ctx context.Context, shortURL, longURL, userID string) error {
 	query := `
-		INSERT INTO urls (short_url, long_url)
-		VALUES ($1, $2)
-		ON CONFLICT (short_url) DO UPDATE
-		SET long_url = EXCLUDED.long_url
-	`
+        INSERT INTO urls (short_url, long_url, user_id)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (short_url) DO UPDATE
+        SET long_url = EXCLUDED.long_url,
+            user_id = EXCLUDED.user_id
+    `
 
-	_, err := db.conn.Exec(ctx, query, shortURL, longURL)
+	_, err := db.conn.Exec(ctx, query, shortURL, longURL, userID)
 	if err != nil {
 		return fmt.Errorf("error inserting URL: %v", err)
 	}
@@ -90,16 +88,16 @@ func (db *DB) InsertURL(ctx context.Context, shortURL, longURL string) error {
 	return nil
 }
 
-// GetShortURL retrieves the short URL for a given long URL
+// Modified GetShortURL function to include user_id
 
-func (db *DB) GetShortURL(ctx context.Context, longURL string) (string, error) {
+func (db *DB) GetShortURL(ctx context.Context, longURL, userID string) (string, error) {
 	var shortURL string
-	query := "SELECT short_url FROM urls WHERE long_url = $1"
+	query := "SELECT short_url FROM urls WHERE long_url = $1 AND user_id = $2"
 
-	err := db.conn.QueryRow(ctx, query, longURL).Scan(&shortURL)
+	err := db.conn.QueryRow(ctx, query, longURL, userID).Scan(&shortURL)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return "", fmt.Errorf("long URL not found")
+			return "", fmt.Errorf("long URL not found for user")
 		}
 		return "", fmt.Errorf("error retrieving short URL: %v", err)
 	}
@@ -107,30 +105,30 @@ func (db *DB) GetShortURL(ctx context.Context, longURL string) (string, error) {
 	return shortURL, nil
 }
 
-// GetLongURL retrieves the long URL for a given short URL
+// Modified GetLongURL function to include user_id check
 
-func (db *DB) GetLongURL(ctx context.Context, shortURL string) (string, error) {
-	var longURL string
-	query := "SELECT long_url FROM urls WHERE short_url = $1"
+func (db *DB) GetLongURL(ctx context.Context, shortURL string) (string, string, error) {
+	var longURL, userID string
+	query := "SELECT long_url, user_id FROM urls WHERE short_url = $1"
 
-	err := db.conn.QueryRow(ctx, query, shortURL).Scan(&longURL)
+	err := db.conn.QueryRow(ctx, query, shortURL).Scan(&longURL, &userID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return "", fmt.Errorf("short URL not found")
+			return "", "", fmt.Errorf("short URL not found")
 		}
-		return "", fmt.Errorf("error retrieving long URL: %v", err)
+		return "", "", fmt.Errorf("error retrieving long URL: %v", err)
 	}
 
-	return longURL, nil
+	return longURL, userID, nil
 }
 
-// LongURLExists checks if a long URL already exists in the database
+// Modified LongURLExists function to include user_id
 
-func (db *DB) LongURLExists(ctx context.Context, longURL string) (bool, error) {
+func (db *DB) LongURLExists(ctx context.Context, longURL, userID string) (bool, error) {
 	var exists bool
-	query := "SELECT EXISTS(SELECT 1 FROM urls WHERE long_url = $1)"
+	query := "SELECT EXISTS(SELECT 1 FROM urls WHERE long_url = $1 AND user_id = $2)"
 
-	err := db.conn.QueryRow(ctx, query, longURL).Scan(&exists)
+	err := db.conn.QueryRow(ctx, query, longURL, userID).Scan(&exists)
 	if err != nil {
 		return false, fmt.Errorf("error checking long URL existence: %v", err)
 	}
@@ -138,43 +136,66 @@ func (db *DB) LongURLExists(ctx context.Context, longURL string) (bool, error) {
 	return exists, nil
 }
 
-// InsertURLs inserts multiple URL pairs into the database using a transaction
+// Modified InsertURLs function to include user_id
 
 func (db *DB) InsertURLs(ctx context.Context, urlPairs []RequestData) error {
-	// Start a transaction
 	tx, err := db.conn.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("error starting transaction: %v", err)
 	}
-	// Ensure the transaction is rolled back if an error occurs
 	defer tx.Rollback(ctx)
 
-	// Prepare the query
 	query := `
-		INSERT INTO urls (short_url, long_url)
-		VALUES ($1, $2)
-		ON CONFLICT (short_url) DO UPDATE
-		SET long_url = EXCLUDED.long_url
-	`
+        INSERT INTO urls (short_url, long_url, user_id)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (short_url) DO UPDATE
+        SET long_url = EXCLUDED.long_url,
+            user_id = EXCLUDED.user_id
+    `
 
-	// Create a prepared statement
 	stmt, err := tx.Prepare(ctx, "insert_urls", query)
 	if err != nil {
 		return fmt.Errorf("error preparing statement: %v", err)
 	}
 
-	// Insert each URL pair
 	for _, pair := range urlPairs {
-		_, err := tx.Exec(ctx, stmt.Name, pair.ID, pair.URL)
+		_, err := tx.Exec(ctx, stmt.Name, pair.ID, pair.URL, pair.UserID)
 		if err != nil {
-			return fmt.Errorf("error inserting URL pair (%s, %s): %v", pair.ID, pair.URL, err)
+			return fmt.Errorf("error inserting URL pair (%s, %s, %s): %v",
+				pair.ID, pair.URL, pair.UserID, err)
 		}
 	}
 
-	// Commit the transaction
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("error committing transaction: %v", err)
 	}
 
 	return nil
+}
+
+func (db *DB) GetURLsByUser(ctx context.Context, userID string) ([]RequestData, error) {
+	query := "SELECT short_url, long_url FROM urls WHERE user_id = $1"
+
+	rows, err := db.conn.Query(ctx, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("error querying URLs: %v", err)
+	}
+	defer rows.Close()
+
+	var urls []RequestData
+	for rows.Next() {
+		var url RequestData
+		err := rows.Scan(&url.ID, &url.URL)
+		if err != nil {
+			return nil, fmt.Errorf("error scanning URL row: %v", err)
+		}
+		url.UserID = userID
+		urls = append(urls, url)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating URL rows: %v", err)
+	}
+
+	return urls, nil
 }

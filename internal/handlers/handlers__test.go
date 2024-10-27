@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"github.com/vkobazev/goShortenerUrl/internal/jwt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -108,6 +109,7 @@ func TestCreateShortURL(t *testing.T) {
 		t.Run(tt.testName, func(t *testing.T) {
 			// Создаем новый экземпляр Echo
 			e := echo.New()
+			e.Use(jwt.JWTMiddleware())
 
 			// Устанавливаем глобальную переменную URLShortener
 			sh := URLShortener{

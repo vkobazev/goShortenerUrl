@@ -7,9 +7,10 @@ import (
 )
 
 type Event struct {
-	ID    uint   `json:"id"`
-	Short string `json:"short_url"`
-	Long  string `json:"original_url"`
+	ID     uint   `json:"id"`
+	Short  string `json:"short_url"`
+	Long   string `json:"original_url"`
+	UserID string `json:"user_id"`
 }
 
 type Producer struct {
