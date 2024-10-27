@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/jackc/pgx/v5"
+	"github.com/vkobazev/goShortenerUrl/internal/consts"
 	"time"
 )
 
@@ -17,6 +18,11 @@ type RequestData struct {
 	ID     string `json:"correlation_id"`
 	URL    string `json:"original_url"`
 	UserID string `json:"user_id"`
+}
+
+type URLResponse struct {
+	ShortURL    string `json:"short_url"`
+	OriginalURL string `json:"original_url"`
 }
 
 func New(connString string) (*DB, error) {
@@ -173,7 +179,7 @@ func (db *DB) InsertURLs(ctx context.Context, urlPairs []RequestData) error {
 	return nil
 }
 
-func (db *DB) GetURLsByUser(ctx context.Context, userID string) ([]RequestData, error) {
+func (db *DB) GetURLsByUser(ctx context.Context, userID string) ([]URLResponse, error) {
 	query := "SELECT short_url, long_url FROM urls WHERE user_id = $1"
 
 	rows, err := db.conn.Query(ctx, query, userID)
@@ -182,15 +188,18 @@ func (db *DB) GetURLsByUser(ctx context.Context, userID string) ([]RequestData, 
 	}
 	defer rows.Close()
 
-	var urls []RequestData
+	var urls []URLResponse
 	for rows.Next() {
-		var url RequestData
-		err := rows.Scan(&url.ID, &url.URL)
+		var shortURL, longURL string
+		err := rows.Scan(&shortURL, &longURL)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning URL row: %v", err)
 		}
-		url.UserID = userID
-		urls = append(urls, url)
+
+		urls = append(urls, URLResponse{
+			ShortURL:    consts.BaseURL + shortURL,
+			OriginalURL: longURL,
+		})
 	}
 
 	if err = rows.Err(); err != nil {
