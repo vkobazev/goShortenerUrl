@@ -153,6 +153,9 @@ func (sh *URLShortener) APIReturnUserData(c echo.Context) error {
 			"message": "Failed to retrieve user URLs",
 		})
 	}
+	if urls == nil {
+		return c.JSON(http.StatusUnauthorized, urls)
+	}
 
 	return c.JSON(http.StatusOK, urls)
 }
