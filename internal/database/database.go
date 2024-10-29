@@ -246,9 +246,6 @@ func (db *DB) DeleteURLforUser(ctx context.Context, userID string, shortURLs []s
 		return nil
 	}
 
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
 	query := `
         UPDATE urls
         SET deleted = TRUE
