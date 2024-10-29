@@ -10,7 +10,7 @@ import (
 
 var (
 	JWTSecret       = "your_secret_key"
-	TokenExpiration = time.Hour * 1
+	TokenExpiration = time.Hour * 144
 	CookieName      = "token"
 	UserIDKey       = "user"
 )

@@ -88,6 +88,7 @@ func SetupEcho(l *zap.Logger, sh *handlers.URLShortener) {
 			user := api.Group("user/")
 			{
 				user.GET("urls", sh.APIReturnUserData)
+				user.DELETE("urls", sh.APIDeleteUserURLs)
 			}
 		}
 	}

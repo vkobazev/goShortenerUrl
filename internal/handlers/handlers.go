@@ -75,13 +75,13 @@ func (sh *URLShortener) GetLongURL(c echo.Context) error {
 
 	id := c.Param("id")
 
-	longURL, _, err := sh.RetrieveURL(id)
+	longURL, _, err, deleted := sh.RetrieveURL(id)
 	if err != nil {
 		return c.String(http.StatusNotFound, "Short URL not found")
 	}
-
-	// You might want to add authorization check here
-	// depending on your requirements
+	if deleted {
+		return c.String(http.StatusGone, "410 Gone")
+	}
 
 	c.Response().Header().Set("Content-Type", "text/plain; charset=UTF-8")
 	return c.Redirect(http.StatusTemporaryRedirect, longURL)
@@ -158,6 +158,56 @@ func (sh *URLShortener) APIReturnUserData(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, urls)
+}
+
+func (sh *URLShortener) APIDeleteUserURLs(c echo.Context) error {
+	userID := c.Get(jwt.UserIDKey).(string)
+
+	var shortURLs []string
+	if err := c.Bind(&shortURLs); err != nil {
+		return c.String(http.StatusBadRequest, "Invalid request body")
+	}
+
+	if len(shortURLs) == 0 {
+		return c.NoContent(http.StatusAccepted)
+	}
+
+	ctx := context.Background()
+	const batchSize = 1000
+	const numWorkers = 5
+
+	batch := func(urls []string, size int) [][]string {
+		var batches [][]string
+		for size < len(urls) {
+			urls, batches = urls[size:], append(batches, urls[0:size:size])
+		}
+		if len(urls) > 0 {
+			batches = append(batches, urls)
+		}
+		return batches
+	}
+
+	batches := batch(shortURLs, batchSize)
+	jobs := make(chan []string, len(batches))
+	results := make(chan error, len(batches))
+
+	for w := 0; w < numWorkers; w++ {
+		go func() {
+			for batch := range jobs {
+				err := sh.DB.DeleteURLforUser(ctx, userID, batch)
+				results <- err
+			}
+		}()
+	}
+
+	go func() {
+		for _, batch := range batches {
+			jobs <- batch
+		}
+		close(jobs)
+	}()
+
+	return c.NoContent(http.StatusAccepted)
 }
 
 // Helper functions
@@ -239,20 +289,28 @@ func (sh *URLShortener) StoreURL(longURL, userID string) (string, error) {
 	}
 }
 
-func (sh *URLShortener) RetrieveURL(id string) (string, string, error) {
+func (sh *URLShortener) RetrieveURL(id string) (string, string, error, bool) {
 	switch {
 	case config.Options.DataBaseConn == "":
 		longURL, ok := sh.URLS[id]
 		if !ok {
-			return "", "", fmt.Errorf("not found")
+			return "", "", fmt.Errorf("not found"), false
 		}
-		return longURL, "", nil
+		return longURL, "", nil, false
 	default:
+		_, deleted, err := sh.DB.LongURLDeleted(context.Background(), id)
+		if err != nil {
+			return "", "", err, false
+		}
+		if deleted {
+			return "", "", err, deleted
+		}
+
 		longURL, userID, err := sh.DB.GetLongURL(context.Background(), id)
 		if err != nil {
-			return "", "", err
+			return "", "", err, false
 		}
-		return longURL, userID, nil
+		return longURL, userID, nil, false
 	}
 }
 

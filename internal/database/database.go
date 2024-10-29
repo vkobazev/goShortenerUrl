@@ -61,6 +61,7 @@ func (db *DB) CreateTable(ctx context.Context) error {
             short_url VARCHAR(50) UNIQUE NOT NULL,
             long_url TEXT NOT NULL,
             user_id VARCHAR(50) NOT NULL,
+            deleted BOOLEAN DEFAULT FALSE,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
         );
         CREATE INDEX IF NOT EXISTS idx_short_url ON urls (short_url, long_url);
@@ -98,7 +99,11 @@ func (db *DB) InsertURL(ctx context.Context, shortURL, longURL, userID string) e
 
 func (db *DB) GetShortURL(ctx context.Context, longURL, userID string) (string, error) {
 	var shortURL string
-	query := "SELECT short_url FROM urls WHERE long_url = $1 AND user_id = $2"
+	query := `
+		SELECT short_url 
+		FROM urls 
+		WHERE long_url = $1 AND user_id = $2
+	`
 
 	err := db.conn.QueryRow(ctx, query, longURL, userID).Scan(&shortURL)
 	if err != nil {
@@ -115,12 +120,16 @@ func (db *DB) GetShortURL(ctx context.Context, longURL, userID string) (string, 
 
 func (db *DB) GetLongURL(ctx context.Context, shortURL string) (string, string, error) {
 	var longURL, userID string
-	query := "SELECT long_url, user_id FROM urls WHERE short_url = $1"
+	query := `
+		SELECT long_url, user_id 
+		FROM urls 
+		WHERE short_url = $1 AND deleted = FALSE
+	`
 
 	err := db.conn.QueryRow(ctx, query, shortURL).Scan(&longURL, &userID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return "", "", fmt.Errorf("short URL not found")
+			return "", "", fmt.Errorf("short URL not found или удален")
 		}
 		return "", "", fmt.Errorf("error retrieving long URL: %v", err)
 	}
@@ -140,6 +149,24 @@ func (db *DB) LongURLExists(ctx context.Context, longURL, userID string) (bool, 
 	}
 
 	return exists, nil
+}
+
+func (db *DB) LongURLDeleted(ctx context.Context, shortURL string) (string, bool, error) {
+	query := `
+        SELECT long_url, deleted
+        FROM urls
+        WHERE short_url = $1
+    `
+
+	var originalURL string
+	var deleted bool
+
+	err := db.conn.QueryRow(ctx, query, shortURL).Scan(&originalURL, &deleted)
+	if err != nil {
+		return "", false, fmt.Errorf("error retrieving URL: %v", err)
+	}
+
+	return originalURL, deleted, nil
 }
 
 // Modified InsertURLs function to include user_id
@@ -180,7 +207,10 @@ func (db *DB) InsertURLs(ctx context.Context, urlPairs []RequestData) error {
 }
 
 func (db *DB) GetURLsByUser(ctx context.Context, userID string) ([]URLResponse, error) {
-	query := "SELECT short_url, long_url FROM urls WHERE user_id = $1"
+	query := `
+		SELECT short_url, long_url 
+		FROM urls 
+		WHERE user_id = $1`
 
 	rows, err := db.conn.Query(ctx, query, userID)
 	if err != nil {
@@ -207,4 +237,38 @@ func (db *DB) GetURLsByUser(ctx context.Context, userID string) ([]URLResponse, 
 	}
 
 	return urls, nil
+}
+
+func (db *DB) DeleteURLforUser(ctx context.Context, userID string, shortURLs []string) error {
+	if len(shortURLs) == 0 {
+		return nil
+	}
+
+	query := `
+        UPDATE urls
+        SET deleted = TRUE
+        WHERE user_id = $1
+          AND short_url = ANY($2::text[])
+    `
+
+	tx, err := db.conn.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback(ctx)
+
+	result, err := tx.Exec(ctx, query, userID, shortURLs)
+	if err != nil {
+		return fmt.Errorf("error marking URLs as deleted: %v", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("no URLs were updated")
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("failed to commit transaction: %v", err)
+	}
+
+	return nil
 }
