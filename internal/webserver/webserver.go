@@ -20,7 +20,7 @@ func StartWebServer() {
 
 	if config.Options.DataBaseConn != "" {
 		InitDB(sh)
-		defer sh.DB.Close(context.Background())
+		defer sh.DB.Close()
 	} else {
 		SetupEvents(sh)
 		defer data.P.Close()
