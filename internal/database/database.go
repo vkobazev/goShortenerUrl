@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/jackc/pgx/v5"
 	"github.com/vkobazev/goShortenerUrl/internal/consts"
+	"sync"
 	"time"
 )
 
@@ -12,6 +13,7 @@ import (
 
 type DB struct {
 	conn *pgx.Conn
+	mu   sync.RWMutex
 }
 
 type RequestData struct {
@@ -244,6 +246,9 @@ func (db *DB) DeleteURLforUser(ctx context.Context, userID string, shortURLs []s
 		return nil
 	}
 
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
 	query := `
         UPDATE urls
         SET deleted = TRUE
@@ -251,23 +256,13 @@ func (db *DB) DeleteURLforUser(ctx context.Context, userID string, shortURLs []s
           AND short_url = ANY($2::text[])
     `
 
-	tx, err := db.conn.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %v", err)
-	}
-	defer tx.Rollback(ctx)
-
-	result, err := tx.Exec(ctx, query, userID, shortURLs)
+	result, err := db.conn.Exec(ctx, query, userID, shortURLs)
 	if err != nil {
 		return fmt.Errorf("error marking URLs as deleted: %v", err)
 	}
 
 	if result.RowsAffected() == 0 {
 		return fmt.Errorf("no URLs were updated")
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("failed to commit transaction: %v", err)
 	}
 
 	return nil

@@ -173,7 +173,7 @@ func (sh *URLShortener) APIDeleteUserURLs(c echo.Context) error {
 	}
 
 	ctx := context.Background()
-	const batchSize = 1000
+	const batchSize = 100
 	const numWorkers = 5
 
 	batch := func(urls []string, size int) [][]string {
