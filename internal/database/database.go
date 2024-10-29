@@ -3,58 +3,63 @@ package database
 import (
 	"context"
 	"fmt"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/vkobazev/goShortenerUrl/internal/consts"
-	"sync"
 	"time"
 )
 
-// DB represents the database connection
-
+// DB представляет пул соединений с базой данных
 type DB struct {
-	conn *pgx.Conn
-	mu   sync.RWMutex
+	pool *pgxpool.Pool
 }
 
+// RequestData представляет данные запроса для вставки URL
 type RequestData struct {
 	ID     string `json:"correlation_id"`
 	URL    string `json:"original_url"`
 	UserID string `json:"user_id"`
 }
 
+// URLResponse представляет ответ с коротким и оригинальным URL
 type URLResponse struct {
 	ShortURL    string `json:"short_url"`
 	OriginalURL string `json:"original_url"`
 }
 
 func New(connString string) (*DB, error) {
-	conn, err := pgx.Connect(context.Background(), connString)
+	config, err := pgxpool.ParseConfig(connString)
 	if err != nil {
-		return nil, fmt.Errorf("unable to connect to database: %v", err)
+		return nil, fmt.Errorf("не удалось разобрать строку подключения: %v", err)
 	}
 
-	return &DB{conn: conn}, nil
+	// Опциональная настройка параметров пула соединений
+	config.MaxConns = 25 // Максимальное количество соединений в пуле
+	config.MinConns = 5  // Минимальное количество соединений в пуле
+
+	pool, err := pgxpool.NewWithConfig(context.Background(), config)
+	if err != nil {
+		return nil, fmt.Errorf("не удалось создать пул соединений: %v", err)
+	}
+
+	return &DB{pool: pool}, nil
 }
 
-func (db *DB) Close(ctx context.Context) error {
-	return db.conn.Close(ctx)
+func (db *DB) Close() {
+	db.pool.Close()
 }
 
 func (db *DB) Ping(ctx context.Context) error {
-	// Create a context with a timeout
+
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	// Ping the database
-	err := db.conn.Ping(ctx)
+	err := db.pool.Ping(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to ping database: %v", err)
+		return fmt.Errorf("не удалось пинговать базу данных: %v", err)
 	}
 
 	return nil
 }
-
-// Modified CreateTable function to include user_id
 
 func (db *DB) CreateTable(ctx context.Context) error {
 	query := `
@@ -70,15 +75,13 @@ func (db *DB) CreateTable(ctx context.Context) error {
         CREATE INDEX IF NOT EXISTS idx_user_id ON urls (user_id);
     `
 
-	_, err := db.conn.Exec(ctx, query)
+	_, err := db.pool.Exec(ctx, query)
 	if err != nil {
-		return fmt.Errorf("error creating table: %v", err)
+		return fmt.Errorf("ошибка при создании таблицы: %v", err)
 	}
 
 	return nil
 }
-
-// Modified InsertURL function to include user_id
 
 func (db *DB) InsertURL(ctx context.Context, shortURL, longURL, userID string) error {
 	query := `
@@ -89,15 +92,13 @@ func (db *DB) InsertURL(ctx context.Context, shortURL, longURL, userID string) e
             user_id = EXCLUDED.user_id
     `
 
-	_, err := db.conn.Exec(ctx, query, shortURL, longURL, userID)
+	_, err := db.pool.Exec(ctx, query, shortURL, longURL, userID)
 	if err != nil {
-		return fmt.Errorf("error inserting URL: %v", err)
+		return fmt.Errorf("ошибка при вставке URL: %v", err)
 	}
 
 	return nil
 }
-
-// Modified GetShortURL function to include user_id
 
 func (db *DB) GetShortURL(ctx context.Context, longURL, userID string) (string, error) {
 	var shortURL string
@@ -107,18 +108,16 @@ func (db *DB) GetShortURL(ctx context.Context, longURL, userID string) (string, 
 		WHERE long_url = $1 AND user_id = $2
 	`
 
-	err := db.conn.QueryRow(ctx, query, longURL, userID).Scan(&shortURL)
+	err := db.pool.QueryRow(ctx, query, longURL, userID).Scan(&shortURL)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			return "", fmt.Errorf("long URL not found for user")
+		if err.Error() == "no rows in result set" {
+			return "", fmt.Errorf("длинный URL не найден для пользователя")
 		}
-		return "", fmt.Errorf("error retrieving short URL: %v", err)
+		return "", fmt.Errorf("ошибка при получении короткого URL: %v", err)
 	}
 
 	return shortURL, nil
 }
-
-// Modified GetLongURL function to include user_id check
 
 func (db *DB) GetLongURL(ctx context.Context, shortURL string) (string, string, error) {
 	var longURL, userID string
@@ -128,26 +127,24 @@ func (db *DB) GetLongURL(ctx context.Context, shortURL string) (string, string, 
 		WHERE short_url = $1 AND deleted = FALSE
 	`
 
-	err := db.conn.QueryRow(ctx, query, shortURL).Scan(&longURL, &userID)
+	err := db.pool.QueryRow(ctx, query, shortURL).Scan(&longURL, &userID)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			return "", "", fmt.Errorf("short URL not found или удален")
+		if err.Error() == "no rows in result set" {
+			return "", "", fmt.Errorf("короткий URL не найден или удален")
 		}
-		return "", "", fmt.Errorf("error retrieving long URL: %v", err)
+		return "", "", fmt.Errorf("ошибка при получении длинного URL: %v", err)
 	}
 
 	return longURL, userID, nil
 }
 
-// Modified LongURLExists function to include user_id
-
 func (db *DB) LongURLExists(ctx context.Context, longURL, userID string) (bool, error) {
 	var exists bool
 	query := "SELECT EXISTS(SELECT 1 FROM urls WHERE long_url = $1 AND user_id = $2)"
 
-	err := db.conn.QueryRow(ctx, query, longURL, userID).Scan(&exists)
+	err := db.pool.QueryRow(ctx, query, longURL, userID).Scan(&exists)
 	if err != nil {
-		return false, fmt.Errorf("error checking long URL existence: %v", err)
+		return false, fmt.Errorf("ошибка при проверке существования длинного URL: %v", err)
 	}
 
 	return exists, nil
@@ -163,20 +160,18 @@ func (db *DB) LongURLDeleted(ctx context.Context, shortURL string) (string, bool
 	var originalURL string
 	var deleted bool
 
-	err := db.conn.QueryRow(ctx, query, shortURL).Scan(&originalURL, &deleted)
+	err := db.pool.QueryRow(ctx, query, shortURL).Scan(&originalURL, &deleted)
 	if err != nil {
-		return "", false, fmt.Errorf("error retrieving URL: %v", err)
+		return "", false, fmt.Errorf("ошибка при получении URL: %v", err)
 	}
 
 	return originalURL, deleted, nil
 }
 
-// Modified InsertURLs function to include user_id
-
 func (db *DB) InsertURLs(ctx context.Context, urlPairs []RequestData) error {
-	tx, err := db.conn.Begin(ctx)
+	tx, err := db.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("error starting transaction: %v", err)
+		return fmt.Errorf("ошибка при начале транзакции: %v", err)
 	}
 	defer tx.Rollback(ctx)
 
@@ -188,21 +183,16 @@ func (db *DB) InsertURLs(ctx context.Context, urlPairs []RequestData) error {
             user_id = EXCLUDED.user_id
     `
 
-	stmt, err := tx.Prepare(ctx, "insert_urls", query)
-	if err != nil {
-		return fmt.Errorf("error preparing statement: %v", err)
-	}
-
 	for _, pair := range urlPairs {
-		_, err := tx.Exec(ctx, stmt.Name, pair.ID, pair.URL, pair.UserID)
+		_, err := tx.Exec(ctx, query, pair.ID, pair.URL, pair.UserID)
 		if err != nil {
-			return fmt.Errorf("error inserting URL pair (%s, %s, %s): %v",
+			return fmt.Errorf("ошибка при вставке пары URL (%s, %s, %s): %v",
 				pair.ID, pair.URL, pair.UserID, err)
 		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("error committing transaction: %v", err)
+		return fmt.Errorf("ошибка при коммите транзакции: %v", err)
 	}
 
 	return nil
@@ -212,11 +202,12 @@ func (db *DB) GetURLsByUser(ctx context.Context, userID string) ([]URLResponse, 
 	query := `
 		SELECT short_url, long_url 
 		FROM urls 
-		WHERE user_id = $1`
+		WHERE user_id = $1
+	`
 
-	rows, err := db.conn.Query(ctx, query, userID)
+	rows, err := db.pool.Query(ctx, query, userID)
 	if err != nil {
-		return nil, fmt.Errorf("error querying URLs: %v", err)
+		return nil, fmt.Errorf("ошибка при запросе URL: %v", err)
 	}
 	defer rows.Close()
 
@@ -225,7 +216,7 @@ func (db *DB) GetURLsByUser(ctx context.Context, userID string) ([]URLResponse, 
 		var shortURL, longURL string
 		err := rows.Scan(&shortURL, &longURL)
 		if err != nil {
-			return nil, fmt.Errorf("error scanning URL row: %v", err)
+			return nil, fmt.Errorf("ошибка при сканировании строки URL: %v", err)
 		}
 
 		urls = append(urls, URLResponse{
@@ -235,7 +226,7 @@ func (db *DB) GetURLsByUser(ctx context.Context, userID string) ([]URLResponse, 
 	}
 
 	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating URL rows: %v", err)
+		return nil, fmt.Errorf("ошибка при итерации строк URL: %v", err)
 	}
 
 	return urls, nil
@@ -253,13 +244,13 @@ func (db *DB) DeleteURLforUser(ctx context.Context, userID string, shortURLs []s
           AND short_url = ANY($2::text[])
     `
 
-	result, err := db.conn.Exec(ctx, query, userID, shortURLs)
+	result, err := db.pool.Exec(ctx, query, userID, shortURLs)
 	if err != nil {
-		return fmt.Errorf("error marking URLs as deleted: %v", err)
+		return fmt.Errorf("ошибка при пометке URL как удаленных: %v", err)
 	}
 
 	if result.RowsAffected() == 0 {
-		return fmt.Errorf("no URLs were updated")
+		return fmt.Errorf("не было обновлено ни одного URL")
 	}
 
 	return nil
